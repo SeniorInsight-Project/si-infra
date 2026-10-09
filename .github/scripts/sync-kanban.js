@@ -3,7 +3,8 @@
 // - Adiciona as issues abertas com a label do quadro (padrão: mvp) de todos os repositórios.
 // - Itens novos herdam a coluna que tinham nos quadros antigos; senão, HUs entram em "Backlog"
 //   e o resto (fundação) em "A fazer".
-// - Itens que já estão no quadro não são movidos (respeita o que o time mudou).
+// - Itens que já estão no quadro não são movidos (respeita o que o time mudou), exceto os
+//   que estão sem coluna, que recebem a coluna padrão.
 // - Limpeza: issue fechada como concluída vai para "Concluído"; issue fechada como
 //   duplicada ou não planejada, issue sem a label e PR saem do quadro.
 
@@ -103,6 +104,10 @@ module.exports = async ({ github, core }) => {
   const moverPara = (itemId, coluna) => github.graphql(
     `mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }`,
     { p: projeto.id, i: itemId, f: status.id, o: opcao[coluna] });
+
+  // Coluna de quem entra sem histórico: HUs e suas tarefas em "Backlog", fundação em "A fazer"
+  const colunaPadrao = t => t.startsWith('HU-') ? 'Backlog' : 'A fazer';
+
   let removidos = 0;
   for (const [id, it] of noQuadro) {
     const fechadaConcluida = it.tipo === 'Issue' && it.estado === 'CLOSED' && it.motivo === 'COMPLETED';
@@ -116,12 +121,12 @@ module.exports = async ({ github, core }) => {
       removidos++;
     } else if (fechadaConcluida && it.coluna !== 'Concluído') {
       await moverPara(it.itemId, 'Concluído');
+    } else if (it.estado === 'OPEN' && !it.coluna) {
+      // Entrou sozinha no quadro (ex.: sub-issue adicionada pelo GitHub) e ficou sem coluna
+      await moverPara(it.itemId, colunaPadrao(it.titulo));
     }
   }
   core.info(`Itens removidos nesta execução: ${removidos}`);
-
-  // Coluna de quem entra sem histórico: HUs e suas tarefas em "Backlog", fundação em "A fazer"
-  const colunaPadrao = t => t.startsWith('HU-') ? 'Backlog' : 'A fazer';
 
   // Reorganização opcional: fundação (título sem "HU-") em "A fazer", HUs e suas tarefas em "Backlog"
   if (reorganizar) {
