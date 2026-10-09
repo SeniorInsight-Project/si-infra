@@ -69,7 +69,7 @@ module.exports = async ({ github, core }) => {
         `query($id:ID!,$after:String){ node(id:$id){ ... on ProjectV2 { items(first:100,after:$after){
            pageInfo{ hasNextPage endCursor }
            nodes{ id
-             content{ __typename ... on Issue{ id state stateReason labels(first:30){ nodes{ name } } } ... on PullRequest{ id } }
+             content{ __typename ... on Issue{ id number title repository{ name } state stateReason labels(first:30){ nodes{ name } } } ... on PullRequest{ id } }
              fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } }`,
         { id: projectId, after });
       const pg = r.node.items;
@@ -78,6 +78,7 @@ module.exports = async ({ github, core }) => {
         mapa.set(it.content.id, {
           itemId: it.id, tipo: it.content.__typename, estado: it.content.state, motivo: it.content.stateReason,
           labels: (it.content.labels?.nodes ?? []).map(l => l.name), coluna: it.fieldValueByName?.name ?? null,
+          nome: it.content.repository ? `${it.content.repository.name}#${it.content.number} ${it.content.title}` : it.content.id,
         });
       }
       after = pg.pageInfo.hasNextPage ? pg.pageInfo.endCursor : null;
@@ -147,6 +148,13 @@ module.exports = async ({ github, core }) => {
     }
   }
   core.info(`Itens adicionados nesta execução: ${adicionados}`);
+
+  // Lista final do quadro no log, por coluna
+  const final = await itensDe(projeto.id);
+  for (const coluna of [...COLUNAS, null]) {
+    const nomes = [...final.values()].filter(it => (it.coluna ?? null) === coluna).map(it => it.nome).sort();
+    if (nomes.length) core.info(`\n[${coluna ?? 'Sem coluna'}] ${nomes.length} itens\n  ` + nomes.join('\n  '));
+  }
 
   // 6. Fechar os quadros antigos (opcional; reversível em Settings do projeto)
   if (fecharAntigos) {
