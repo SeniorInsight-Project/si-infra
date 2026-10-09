@@ -1,0 +1,131 @@
+// Sincroniza o quadro único da organização.
+// - Cria o projeto (se não existir) com as colunas padrão.
+// - Adiciona todas as issues e PRs abertos de todos os repositórios.
+// - Itens novos herdam a coluna que tinham nos quadros antigos; senão,
+//   PR entra em "Em revisão" e issue em "Backlog".
+// - Itens que já estão no quadro não são movidos (respeita o que o time mudou).
+
+const COLUNAS = ['Backlog', 'A fazer', 'Em andamento', 'Em revisão', 'Concluído'];
+const CORES = { Backlog: 'GRAY', 'A fazer': 'BLUE', 'Em andamento': 'YELLOW', 'Em revisão': 'PURPLE', Concluído: 'GREEN' };
+
+function colunaEquivalente(nome) {
+  if (!nome) return null;
+  const n = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/done|conclu|feito|finaliz|fechad/.test(n)) return 'Concluído';
+  if (/review|revis|teste|qa|homolog/.test(n)) return 'Em revisão';
+  if (/progress|andamento|doing|fazendo/.test(n)) return 'Em andamento';
+  if (/todo|to do|a fazer|ready|pronto|sprint/.test(n)) return 'A fazer';
+  return 'Backlog';
+}
+
+module.exports = async ({ github, core }) => {
+  const org = process.env.ORG;
+  const titulo = process.env.PROJECT_TITLE;
+  const fecharAntigos = process.env.CLOSE_OLD === 'true';
+
+  // 1. Organização e projetos existentes
+  const { organization } = await github.graphql(
+    `query($org:String!){ organization(login:$org){ id
+       projectsV2(first:50){ nodes{ id number title closed } } } }`,
+    { org });
+  const projetos = organization.projectsV2.nodes;
+  let projeto = projetos.find(p => p.title === titulo);
+
+  if (!projeto) {
+    const r = await github.graphql(
+      `mutation($owner:ID!,$title:String!){ createProjectV2(input:{ownerId:$owner,title:$title}){ projectV2{ id number title closed } } }`,
+      { owner: organization.id, title: titulo });
+    projeto = r.createProjectV2.projectV2;
+    core.info(`Projeto criado: #${projeto.number}`);
+  } else if (projeto.closed) {
+    await github.graphql(`mutation($id:ID!){ updateProjectV2(input:{projectId:$id,closed:false}){ projectV2{ id } } }`, { id: projeto.id });
+  }
+
+  // 2. Campo Status com as colunas padrão
+  const campos = await github.graphql(
+    `query($id:ID!){ node(id:$id){ ... on ProjectV2 { field(name:"Status"){ ... on ProjectV2SingleSelectField { id options{ id name } } } } } }`,
+    { id: projeto.id });
+  let status = campos.node.field;
+  const nomesAtuais = status.options.map(o => o.name);
+  if (nomesAtuais.join('|') !== COLUNAS.join('|')) {
+    // Só acontece na criação: trocar as opções zera o Status dos itens.
+    const r = await github.graphql(
+      `mutation($f:ID!,$opts:[ProjectV2SingleSelectFieldOptionInput!]){
+         updateProjectV2Field(input:{fieldId:$f,singleSelectOptions:$opts}){
+           projectV2Field{ ... on ProjectV2SingleSelectField { id options{ id name } } } } }`,
+      { f: status.id, opts: COLUNAS.map(name => ({ name, color: CORES[name], description: '' })) });
+    status = r.updateProjectV2Field.projectV2Field;
+  }
+  const opcao = Object.fromEntries(status.options.map(o => [o.name, o.id]));
+
+  // 3. Itens de um projeto (id do conteúdo -> coluna)
+  async function itensDe(projectId) {
+    const mapa = new Map();
+    let after = null;
+    do {
+      const r = await github.graphql(
+        `query($id:ID!,$after:String){ node(id:$id){ ... on ProjectV2 { items(first:100,after:$after){
+           pageInfo{ hasNextPage endCursor }
+           nodes{ content{ ... on Issue{ id } ... on PullRequest{ id } }
+             fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } }`,
+        { id: projectId, after });
+      const pg = r.node.items;
+      for (const it of pg.nodes) if (it.content?.id) mapa.set(it.content.id, it.fieldValueByName?.name ?? null);
+      after = pg.pageInfo.hasNextPage ? pg.pageInfo.endCursor : null;
+    } while (after);
+    return mapa;
+  }
+
+  const noQuadro = await itensDe(projeto.id);
+  const antigos = projetos.filter(p => p.id !== projeto.id && !p.closed);
+  const colunaAntiga = new Map();
+  for (const p of antigos) {
+    for (const [id, nome] of await itensDe(p.id)) {
+      if (!colunaAntiga.has(id) || nome) colunaAntiga.set(id, colunaEquivalente(nome));
+    }
+  }
+
+  // 4. Repositórios, issues e PRs abertos
+  const repos = await github.paginate(github.rest.repos.listForOrg, { org, per_page: 100 });
+  let adicionados = 0;
+  for (const repo of repos.filter(r => !r.archived)) {
+    try {
+      await github.graphql(`mutation($p:ID!,$r:ID!){ linkProjectV2ToRepository(input:{projectId:$p,repositoryId:$r}){ repository{ id } } }`,
+        { p: projeto.id, r: repo.node_id });
+    } catch (e) { /* já vinculado */ }
+
+    for (const tipo of ['issues', 'pullRequests']) {
+      let after = null;
+      do {
+        const r = await github.graphql(
+          `query($o:String!,$n:String!,$after:String){ repository(owner:$o,name:$n){
+             ${tipo}(states:OPEN,first:100,after:$after){ pageInfo{ hasNextPage endCursor } nodes{ id number } } } }`,
+          { o: org, n: repo.name, after });
+        const pg = r.repository[tipo];
+        for (const item of pg.nodes) {
+          if (noQuadro.has(item.id)) continue;
+          const add = await github.graphql(
+            `mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }`,
+            { p: projeto.id, c: item.id });
+          const coluna = colunaAntiga.get(item.id) ?? (tipo === 'pullRequests' ? 'Em revisão' : 'Backlog');
+          await github.graphql(
+            `mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }`,
+            { p: projeto.id, i: add.addProjectV2ItemById.item.id, f: status.id, o: opcao[coluna] });
+          noQuadro.set(item.id, coluna);
+          adicionados++;
+        }
+        after = pg.pageInfo.hasNextPage ? pg.pageInfo.endCursor : null;
+      } while (after);
+    }
+  }
+  core.info(`Itens adicionados nesta execução: ${adicionados}`);
+
+  // 5. Fechar os quadros antigos (opcional; reversível em Settings do projeto)
+  if (fecharAntigos) {
+    for (const p of antigos) {
+      await github.graphql(`mutation($id:ID!){ updateProjectV2(input:{projectId:$id,closed:true}){ projectV2{ id } } }`, { id: p.id });
+      core.info(`Quadro fechado: #${p.number} ${p.title}`);
+    }
+  }
+  core.summary.addRaw(`Quadro: https://github.com/orgs/${org}/projects/${projeto.number} — ${adicionados} itens novos`).write();
+};

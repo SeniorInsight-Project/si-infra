@@ -1,0 +1,32 @@
+name: Sincronizar Kanban
+
+# Mantém o quadro único "SeniorInsight Kanban" da organização com todas as
+# issues e PRs abertos de todos os repositórios.
+# Requer o secret KANBAN_TOKEN (PAT clássico com escopos: project, repo, read:org).
+
+on:
+  workflow_dispatch:
+    inputs:
+      fechar_quadros_antigos:
+        description: "Fechar os outros quadros da organização (podem ser reabertos depois)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 */4 * * *"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        env:
+          ORG: SeniorInsight-Project
+          PROJECT_TITLE: SeniorInsight Kanban
+          CLOSE_OLD: ${{ inputs.fechar_quadros_antigos || 'false' }}
+        with:
+          github-token: ${{ secrets.KANBAN_TOKEN }}
+          script: |
+            const run = require('./.github/scripts/sync-kanban.js');
+            await run({ github, core });
