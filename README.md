@@ -8,6 +8,6 @@ Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branch
 
 ## Kanban da organização
 
-O workflow `Sincronizar Kanban` (`.github/workflows/sync-kanban.yml`) mantém o quadro único **SeniorInsight Kanban** com todas as issues e PRs abertos dos repositórios da organização. Roda a cada 4 horas e pode ser disparado à mão em Actions. Precisa do secret `KANBAN_TOKEN` neste repositório (PAT clássico com os escopos `project`, `repo` e `read:org`).
+O workflow `Sincronizar Kanban` (`.github/workflows/sync-kanban.yml`) mantém o quadro único **SeniorInsight Kanban** com as issues abertas que têm a label `mvp` nos repositórios da organização. Para pôr uma issue no quadro, basta a label. Roda a cada 4 horas e pode ser disparado à mão em Actions. Precisa do secret `KANBAN_TOKEN` neste repositório (PAT clássico com os escopos `project`, `repo` e `read:org`).
 
-Colunas: Backlog, A fazer, Em andamento, Em revisão e Concluído. Itens já presentes no quadro não são movidos pelo workflow.
+Colunas: Backlog, A fazer, Em andamento, Em revisão e Concluído. Itens já presentes no quadro não são movidos pelo workflow. Issue fechada como concluída vai para Concluído; fechada como duplicada ou não planejada, sem a label ou PR sai do quadro.

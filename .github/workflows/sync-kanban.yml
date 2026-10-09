@@ -1,7 +1,7 @@
 name: Sincronizar Kanban
 
-# Mantém o quadro único "SeniorInsight Kanban" da organização com todas as
-# issues e PRs abertos de todos os repositórios.
+# Mantém o quadro único "SeniorInsight Kanban" da organização com as issues
+# abertas que têm a label BOARD_LABEL (mvp) em todos os repositórios.
 # Requer o secret KANBAN_TOKEN (PAT clássico com escopos: project, repo, read:org).
 
 on:
@@ -9,6 +9,10 @@ on:
     inputs:
       fechar_quadros_antigos:
         description: "Fechar os outros quadros da organização (podem ser reabertos depois)"
+        type: boolean
+        default: false
+      reorganizar_colunas:
+        description: "Pôr a fundação (título sem HU-) em A fazer e as HUs em Backlog"
         type: boolean
         default: false
   schedule:
@@ -24,7 +28,9 @@ jobs:
         env:
           ORG: SeniorInsight-Project
           PROJECT_TITLE: SeniorInsight Kanban
+          BOARD_LABEL: mvp
           CLOSE_OLD: ${{ inputs.fechar_quadros_antigos || 'false' }}
+          REORGANIZE: ${{ inputs.reorganizar_colunas || 'false' }}
         with:
           github-token: ${{ secrets.KANBAN_TOKEN }}
           script: |
