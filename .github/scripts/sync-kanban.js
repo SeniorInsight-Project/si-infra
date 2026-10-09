@@ -1,8 +1,10 @@
 // Sincroniza o quadro único da organização.
 // - Cria o projeto (se não existir) com as colunas padrão.
 // - Adiciona as issues abertas com a label do quadro (padrão: mvp) de todos os repositórios.
-// - Itens novos herdam a coluna que tinham nos quadros antigos; senão, entram em "Backlog".
-// - Itens que já estão no quadro não são movidos (respeita o que o time mudou).
+// - Itens novos herdam a coluna que tinham nos quadros antigos; senão, HUs entram em "Backlog"
+//   e o resto (fundação) em "A fazer".
+// - Itens que já estão no quadro não são movidos (respeita o que o time mudou), exceto os
+//   que estão sem coluna, que recebem a coluna padrão.
 // - Limpeza: issue fechada como concluída vai para "Concluído"; issue fechada como
 //   duplicada ou não planejada, issue sem a label e PR saem do quadro.
 
@@ -90,6 +92,7 @@ module.exports = async ({ github, core }) => {
 
   const noQuadro = await itensDe(projeto.id);
   const antigos = projetos.filter(p => p.id !== projeto.id && !p.closed);
+  core.info(`Quadros da organização: ${projetos.map(p => `#${p.number} ${p.title} (${p.closed ? 'fechado' : 'aberto'})`).join('; ')}`);
   const colunaAntiga = new Map();
   for (const p of antigos) {
     for (const [id, it] of await itensDe(p.id)) {
@@ -101,6 +104,10 @@ module.exports = async ({ github, core }) => {
   const moverPara = (itemId, coluna) => github.graphql(
     `mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }`,
     { p: projeto.id, i: itemId, f: status.id, o: opcao[coluna] });
+
+  // Coluna de quem entra sem histórico: HUs e suas tarefas em "Backlog", fundação em "A fazer"
+  const colunaPadrao = t => t.startsWith('HU-') ? 'Backlog' : 'A fazer';
+
   let removidos = 0;
   for (const [id, it] of noQuadro) {
     const fechadaConcluida = it.tipo === 'Issue' && it.estado === 'CLOSED' && it.motivo === 'COMPLETED';
@@ -114,6 +121,9 @@ module.exports = async ({ github, core }) => {
       removidos++;
     } else if (fechadaConcluida && it.coluna !== 'Concluído') {
       await moverPara(it.itemId, 'Concluído');
+    } else if (it.estado === 'OPEN' && !it.coluna) {
+      // Entrou sozinha no quadro (ex.: sub-issue adicionada pelo GitHub) e ficou sem coluna
+      await moverPara(it.itemId, colunaPadrao(it.titulo));
     }
   }
   core.info(`Itens removidos nesta execução: ${removidos}`);
@@ -122,7 +132,7 @@ module.exports = async ({ github, core }) => {
   if (reorganizar) {
     for (const it of noQuadro.values()) {
       if (it.estado !== 'OPEN') continue;
-      const coluna = it.titulo.startsWith('HU-') ? 'Backlog' : 'A fazer';
+      const coluna = colunaPadrao(it.titulo);
       if (it.coluna !== coluna) await moverPara(it.itemId, coluna);
     }
   }
@@ -141,7 +151,7 @@ module.exports = async ({ github, core }) => {
       do {
         const r = await github.graphql(
           `query($o:String!,$n:String!,$l:String!,$after:String){ repository(owner:$o,name:$n){
-             issues(states:OPEN,labels:[$l],first:100,after:$after){ pageInfo{ hasNextPage endCursor } nodes{ id number } } } }`,
+             issues(states:OPEN,labels:[$l],first:100,after:$after){ pageInfo{ hasNextPage endCursor } nodes{ id number title } } } }`,
           { o: org, n: repo.name, l: label, after });
         const pg = r.repository.issues;
         for (const item of pg.nodes) {
@@ -149,7 +159,7 @@ module.exports = async ({ github, core }) => {
           const add = await github.graphql(
             `mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }`,
             { p: projeto.id, c: item.id });
-          const coluna = colunaAntiga.get(item.id) ?? 'Backlog';
+          const coluna = colunaAntiga.get(item.id) ?? colunaPadrao(item.title);
           await moverPara(add.addProjectV2ItemById.item.id, coluna);
           noQuadro.set(item.id, { coluna });
           adicionados++;
