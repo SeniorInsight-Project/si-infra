@@ -1,7 +1,7 @@
 name: Sincronizar Kanban
 
-# Mantém o quadro único "SeniorInsight Kanban" da organização com todas as
-# issues e PRs abertos de todos os repositórios.
+# Mantém o quadro único "SeniorInsight Kanban" da organização com as issues
+# abertas que têm a label BOARD_LABEL (mvp) em todos os repositórios.
 # Requer o secret KANBAN_TOKEN (PAT clássico com escopos: project, repo, read:org).
 
 on:
@@ -24,6 +24,7 @@ jobs:
         env:
           ORG: SeniorInsight-Project
           PROJECT_TITLE: SeniorInsight Kanban
+          BOARD_LABEL: mvp
           CLOSE_OLD: ${{ inputs.fechar_quadros_antigos || 'false' }}
         with:
           github-token: ${{ secrets.KANBAN_TOKEN }}
