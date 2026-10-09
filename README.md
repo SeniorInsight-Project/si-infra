@@ -5,3 +5,9 @@ Infraestrutura: docker-compose local (PostgreSQL, Redis, RabbitMQ, Keycloak, Ope
 Parte do SeniorInsight — ver o Documento de Arquitetura de Software (seção 6) para as convenções.
 
 Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branches curtas por issue e abra PR para `develop`.
+
+## Kanban da organização
+
+O workflow `Sincronizar Kanban` (`.github/workflows/sync-kanban.yml`) mantém o quadro único **SeniorInsight Kanban** com todas as issues e PRs abertos dos repositórios da organização. Roda a cada 4 horas e pode ser disparado à mão em Actions. Precisa do secret `KANBAN_TOKEN` neste repositório (PAT clássico com os escopos `project`, `repo` e `read:org`).
+
+Colunas: Backlog, A fazer, Em andamento, Em revisão e Concluído. Itens já presentes no quadro não são movidos pelo workflow.
