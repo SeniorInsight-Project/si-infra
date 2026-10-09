@@ -24,6 +24,7 @@ module.exports = async ({ github, core }) => {
   const titulo = process.env.PROJECT_TITLE;
   const fecharAntigos = process.env.CLOSE_OLD === 'true';
   const label = process.env.BOARD_LABEL || 'mvp';
+  const reorganizar = process.env.REORGANIZE === 'true';
 
   // 1. Organização e projetos existentes
   const { organization } = await github.graphql(
@@ -78,6 +79,7 @@ module.exports = async ({ github, core }) => {
         mapa.set(it.content.id, {
           itemId: it.id, tipo: it.content.__typename, estado: it.content.state, motivo: it.content.stateReason,
           labels: (it.content.labels?.nodes ?? []).map(l => l.name), coluna: it.fieldValueByName?.name ?? null,
+          titulo: it.content.title ?? '',
           nome: it.content.repository ? `${it.content.repository.name}#${it.content.number} ${it.content.title}` : it.content.id,
         });
       }
@@ -115,6 +117,15 @@ module.exports = async ({ github, core }) => {
     }
   }
   core.info(`Itens removidos nesta execução: ${removidos}`);
+
+  // Reorganização opcional: fundação (título sem "HU-") em "A fazer", HUs e suas tarefas em "Backlog"
+  if (reorganizar) {
+    for (const it of noQuadro.values()) {
+      if (it.estado !== 'OPEN') continue;
+      const coluna = it.titulo.startsWith('HU-') ? 'Backlog' : 'A fazer';
+      if (it.coluna !== coluna) await moverPara(it.itemId, coluna);
+    }
+  }
 
   // 5. Repositórios e issues abertas com a label
   const repos = await github.paginate(github.rest.repos.listForOrg, { org, per_page: 100 });

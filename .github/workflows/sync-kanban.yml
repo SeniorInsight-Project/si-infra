@@ -11,6 +11,10 @@ on:
         description: "Fechar os outros quadros da organização (podem ser reabertos depois)"
         type: boolean
         default: false
+      reorganizar_colunas:
+        description: "Pôr a fundação (título sem HU-) em A fazer e as HUs em Backlog"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 */4 * * *"
 
@@ -26,6 +30,7 @@ jobs:
           PROJECT_TITLE: SeniorInsight Kanban
           BOARD_LABEL: mvp
           CLOSE_OLD: ${{ inputs.fechar_quadros_antigos || 'false' }}
+          REORGANIZE: ${{ inputs.reorganizar_colunas || 'false' }}
         with:
           github-token: ${{ secrets.KANBAN_TOKEN }}
           script: |
