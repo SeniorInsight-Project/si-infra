@@ -1,0 +1,19 @@
+{
+  "realm": "seniorinsight",
+  "enabled": true,
+  "displayName": "SeniorInsight (local)",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "familiar" },
+      { "name": "idoso" },
+      { "name": "medico" },
+      { "name": "operadora" },
+      { "name": "administrador" }
+    ]
+  },
+  "clients": []
+}
