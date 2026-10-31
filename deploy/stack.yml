@@ -1,0 +1,481 @@
+# Stack de produção do SeniorInsight na VM da Azure (Docker Swarm de um nó).
+#
+# Deploy: deploy/scripts/deploy-stack.sh (chamado pelo workflow .github/workflows/deploy.yml
+# no runner self-hosted da VM). Os arquivos deste repositório ficam em /opt/seniorinsight/infra.
+#
+# Segredos: criados uma vez na VM por deploy/scripts/bootstrap-vm.sh (docker secret) e montados
+# em /run/secrets/<NOME>. Os serviços Spring leem /run/secrets como "configtree", então um
+# secret montado como DB_PASSWORD resolve o placeholder ${DB_PASSWORD} do application.yml.
+#
+# Imagens: ghcr.io/seniorinsight-project/<repo>:main, publicadas pelo workflow de cada repo.
+
+x-spring-env: &spring-env
+  SERVER_PORT: "8080"
+  SPRING_CONFIG_IMPORT: "optional:configtree:/run/secrets/"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: seniorinsight
+  DB_USERNAME: seniorinsight
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: /
+  RABBITMQ_USERNAME: seniorinsight
+  KEYCLOAK_ISSUER_URI: https://${SI_HOST}/auth/realms/seniorinsight
+  KEYCLOAK_JWK_SET_URI: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/certs
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/certs
+
+x-spring-secrets: &spring-secrets
+  - source: si_db_password
+    target: DB_PASSWORD
+  - source: si_rabbitmq_password
+    target: RABBITMQ_PASSWORD
+
+x-spring-deploy: &spring-deploy
+  replicas: 1
+  update_config:
+    order: stop-first
+    failure_action: rollback
+    monitor: 120s
+  rollback_config:
+    order: stop-first
+  restart_policy:
+    condition: any
+    delay: 10s
+  resources:
+    limits:
+      memory: 384M
+
+x-spring-health: &spring-health
+  test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
+  interval: 20s
+  timeout: 5s
+  retries: 6
+  start_period: 180s
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ---------------------------------------------------------------- borda
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+      - target: 8443
+        published: 8443
+        mode: host
+      - target: 3443
+        published: 3443
+        mode: host
+      - target: 9443
+        published: 9443
+        mode: host
+    environment:
+      SI_HOST: ${SI_HOST}
+      SI_ACME_EMAIL: ${SI_ACME_EMAIL}
+    volumes:
+      - /opt/seniorinsight/infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging: *logging
+
+  web:
+    image: ghcr.io/seniorinsight-project/si-web:main
+    networks: [edge]
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+    logging: *logging
+
+  # ---------------------------------------------------------------- infra
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: seniorinsight
+      POSTGRES_USER: seniorinsight
+      POSTGRES_PASSWORD_FILE: /run/secrets/DB_PASSWORD
+    secrets:
+      - source: si_db_password
+        target: DB_PASSWORD
+      - source: si_ow_db_password
+        target: OW_DB_PASSWORD
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /opt/seniorinsight/infra/postgres/init/01-keycloak-schema.sql:/docker-entrypoint-initdb.d/01-keycloak-schema.sql:ro
+      - /opt/seniorinsight/infra/deploy/postgres-init/03-openwearables.sh:/docker-entrypoint-initdb.d/03-openwearables.sh:ro
+    command: ["postgres", "-c", "max_connections=150", "-c", "shared_buffers=128MB"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seniorinsight -d seniorinsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging: *logging
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    entrypoint: ["/bin/sh", "/opt/si/entrypoints/rabbitmq.sh"]
+    command: ["rabbitmq-server"]
+    environment:
+      RABBITMQ_DEFAULT_USER: seniorinsight
+    secrets:
+      - source: si_rabbitmq_password
+        target: RABBITMQ_PASSWORD
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging: *logging
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: seniorinsight
+      MINIO_ROOT_PASSWORD_FILE: MINIO_ROOT_PASSWORD
+    secrets:
+      - source: si_minio_root_password
+        target: MINIO_ROOT_PASSWORD
+    volumes:
+      - minio_data:/data
+    networks: [backend, edge]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging: *logging
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+    logging: *logging
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.3
+    entrypoint: ["/bin/bash", "/opt/si/entrypoints/keycloak.sh"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/seniorinsight
+      KC_DB_USERNAME: seniorinsight
+      KC_DB_SCHEMA: keycloak
+      KC_HOSTNAME: https://${SI_HOST}/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      JAVA_OPTS_KC_HEAP: "-XX:MaxRAMPercentage=65 -XX:InitialRAMPercentage=20"
+    secrets:
+      - source: si_db_password
+        target: DB_PASSWORD
+      - source: si_keycloak_admin_password
+        target: KEYCLOAK_ADMIN_PASSWORD
+      - source: si_web_client_secret
+        target: SI_WEB_CLIENT_SECRET
+      - source: si_identity_client_secret
+        target: SI_IDENTITY_SERVICE_CLIENT_SECRET
+    volumes:
+      - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
+      - /opt/seniorinsight/infra/keycloak/realm-seniorinsight.json:/opt/keycloak/data/import/realm-seniorinsight.json:ro
+      - /opt/seniorinsight/infra/keycloak/themes/seniorinsight:/opt/keycloak/themes/seniorinsight:ro
+    networks: [backend, edge]
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+      restart_policy:
+        condition: any
+        delay: 15s
+    logging: *logging
+
+  # ---------------------------------------------------------------- serviços
+  api-gateway:
+    image: ghcr.io/seniorinsight-project/si-api-gateway:main
+    environment:
+      <<: *spring-env
+      BACKEND_CORE_URI: http://care-service:8080
+      IDENTITY_SERVICE_URI: http://identity-service:8080
+      NOTIFICATION_SERVICE_URI: http://notification-service:8080
+      GATEWAY_CORS_ALLOWED_ORIGINS: https://${SI_HOST}
+    networks: [backend, edge]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  care-service:
+    image: ghcr.io/seniorinsight-project/si-care-service:main
+    environment:
+      <<: *spring-env
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seniorinsight
+      JDBC_DATABASE_USERNAME: seniorinsight
+      REDIS_URL: redis://redis:6379
+      OPENWEARABLES_ENABLED: "true"
+      OPENWEARABLES_BASE_URL: http://ow-app:8000
+    secrets:
+      - source: si_db_password
+        target: JDBC_DATABASE_PASSWORD
+      - source: si_care_jwt_secret
+        target: JWT_SECRET
+      - source: si_openwearables_api_key
+        target: OPENWEARABLES_API_KEY
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  identity-service:
+    image: ghcr.io/seniorinsight-project/si-identity-service:main
+    environment:
+      <<: *spring-env
+    secrets: *spring-secrets
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  notification-service:
+    image: ghcr.io/seniorinsight-project/si-notification-service:main
+    environment:
+      <<: *spring-env
+    secrets: *spring-secrets
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  telemetry-service:
+    image: ghcr.io/seniorinsight-project/si-telemetry-service:main
+    environment:
+      <<: *spring-env
+      OPENWEARABLES_ENABLED: "true"
+      OPENWEARABLES_BASE_URL: http://ow-app:8000
+      CARE_SERVICE_URL: http://care-service:8080
+    secrets:
+      - source: si_db_password
+        target: DB_PASSWORD
+      - source: si_rabbitmq_password
+        target: RABBITMQ_PASSWORD
+      - source: si_openwearables_api_key
+        target: OPENWEARABLES_API_KEY
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  insight-service:
+    image: ghcr.io/seniorinsight-project/si-insight-service:main
+    environment:
+      <<: *spring-env
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    secrets:
+      - source: si_db_password
+        target: DB_PASSWORD
+      - source: si_rabbitmq_password
+        target: RABBITMQ_PASSWORD
+      - source: si_gemini_api_key
+        target: GEMINI_API_KEY
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  report-service:
+    image: ghcr.io/seniorinsight-project/si-report-service:main
+    environment:
+      <<: *spring-env
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: https://${SI_HOST}:9443
+      MINIO_ACCESS_KEY: seniorinsight
+      ARMAZENAMENTO_BUCKET: si-reports
+      REPORT_AGENDAMENTO_HABILITADO: "true"
+    secrets:
+      - source: si_db_password
+        target: DB_PASSWORD
+      - source: si_rabbitmq_password
+        target: RABBITMQ_PASSWORD
+      - source: si_minio_root_password
+        target: MINIO_SECRET_KEY
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  billing-service:
+    image: ghcr.io/seniorinsight-project/si-billing-service:main
+    environment:
+      <<: *spring-env
+    secrets: *spring-secrets
+    networks: [backend]
+    healthcheck: *spring-health
+    deploy: *spring-deploy
+    logging: *logging
+
+  # ---------------------------------------------------------------- Open Wearables (si-infra#10)
+  ow-app:
+    image: themomentum/open-wearables-backend:0.9.0
+    entrypoint: ["/bin/sh", "/opt/si/entrypoints/open-wearables.sh"]
+    command: ["scripts/start/app.sh"]
+    environment: &ow-env
+      ENVIRONMENT: production
+      TELEMETRY_ENABLED: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: openwearables
+      DB_USER: openwearables
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "2"
+      ADMIN_EMAIL: ${SI_ACME_EMAIL}
+      OUTGOING_WEBHOOKS_ENABLED: "false"
+      CORS_ORIGINS: '["https://${SI_HOST}:3443"]'
+      FRONTEND_URL: https://${SI_HOST}:3443
+      API_BASE_URL: https://${SI_HOST}:8443
+    secrets: &ow-secrets
+      - source: si_ow_db_password
+        target: OW_DB_PASSWORD
+      - source: si_ow_secret_key
+        target: OW_SECRET_KEY
+      - source: si_ow_admin_password
+        target: OW_ADMIN_PASSWORD
+    volumes:
+      - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
+    networks: [backend, edge]
+    deploy:
+      resources:
+        limits:
+          memory: 448M
+      restart_policy:
+        condition: any
+        delay: 15s
+    logging: *logging
+
+  ow-worker:
+    image: themomentum/open-wearables-backend:0.9.0
+    entrypoint: ["/bin/sh", "/opt/si/entrypoints/open-wearables.sh"]
+    command: ["scripts/start/worker.sh"]
+    environment: *ow-env
+    secrets: *ow-secrets
+    volumes:
+      - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+      restart_policy:
+        condition: any
+        delay: 15s
+    logging: *logging
+
+  ow-beat:
+    image: themomentum/open-wearables-backend:0.9.0
+    entrypoint: ["/bin/sh", "/opt/si/entrypoints/open-wearables.sh"]
+    command: ["scripts/start/beat.sh"]
+    environment: *ow-env
+    secrets: *ow-secrets
+    volumes:
+      - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+      restart_policy:
+        condition: any
+        delay: 15s
+    logging: *logging
+
+  ow-frontend:
+    image: themomentum/open-wearables-frontend:0.9.0
+    environment:
+      VITE_API_URL: https://${SI_HOST}:8443
+      API_URL: http://ow-app:8000
+    networks: [edge]
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    logging: *logging
+
+networks:
+  edge:
+    driver: overlay
+  backend:
+    driver: overlay
+    internal: false
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  si_db_password:
+    external: true
+  si_rabbitmq_password:
+    external: true
+  si_keycloak_admin_password:
+    external: true
+  si_web_client_secret:
+    external: true
+  si_identity_client_secret:
+    external: true
+  si_minio_root_password:
+    external: true
+  si_care_jwt_secret:
+    external: true
+  si_gemini_api_key:
+    external: true
+  si_openwearables_api_key:
+    external: true
+  si_ow_db_password:
+    external: true
+  si_ow_secret_key:
+    external: true
+  si_ow_admin_password:
+    external: true
