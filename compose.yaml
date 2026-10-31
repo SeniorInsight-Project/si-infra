@@ -67,13 +67,25 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8180}
       KC_HEALTH_ENABLED: "true"
+      SI_WEB_CLIENT_SECRET: ${SI_WEB_CLIENT_SECRET:?defina SI_WEB_CLIENT_SECRET no .env}
+      SI_IDENTITY_SERVICE_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
       - ./keycloak/realm-seniorinsight.json:/opt/keycloak/data/import/realm-seniorinsight.json:ro
+      - ./keycloak/themes/seniorinsight:/opt/keycloak/themes/seniorinsight:ro
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
 
   backend-core:
     build:
