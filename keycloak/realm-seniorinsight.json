@@ -2,18 +2,123 @@
   "realm": "seniorinsight",
   "enabled": true,
   "displayName": "SeniorInsight (local)",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "verifyEmail": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "resetPasswordAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "actionTokenGeneratedByUserLifespan": 86400,
+  "attributes": {
+    "actionTokenGeneratedByUserLifespan.verify-email": "86400"
+  },
+  "passwordPolicy": "length(10) and digits(1) and regexPattern(.*[A-Za-z].*) and notEmail",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 900,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 900,
+  "quickLoginCheckMilliSeconds": 0,
+  "minimumQuickLoginWaitSeconds": 900,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["pt-BR", "en"],
+  "defaultLocale": "pt-BR",
+  "loginTheme": "seniorinsight",
+  "emailTheme": "seniorinsight",
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "nao-responda@seniorinsight.local",
+    "fromDisplayName": "SeniorInsight",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  },
   "roles": {
     "realm": [
-      { "name": "familiar" },
-      { "name": "idoso" },
-      { "name": "medico" },
-      { "name": "operadora" },
-      { "name": "administrador" }
+      { "name": "familiar", "description": "Familiar ou cuidador responsável por um idoso" },
+      { "name": "medico", "description": "Médico que acompanha idosos" },
+      { "name": "idoso", "description": "Pessoa idosa monitorada" },
+      { "name": "gestor", "description": "Gestor de instituição ou operadora" },
+      { "name": "admin", "description": "Administrador da plataforma" },
+      { "name": "offline_access", "description": "${role_offline-access}" },
+      { "name": "uma_authorization", "description": "${role_uma_authorization}" },
+      {
+        "name": "default-roles-seniorinsight",
+        "description": "Papéis padrão de quem se cadastra pela tela de registro",
+        "composite": true,
+        "composites": {
+          "realm": ["offline_access", "uma_authorization", "familiar"],
+          "client": { "account": ["view-profile", "manage-account"] }
+        }
+      }
     ]
   },
-  "clients": []
+  "defaultRole": { "name": "default-roles-seniorinsight" },
+  "clients": [
+    {
+      "clientId": "si-mobile",
+      "name": "SeniorInsight Mobile",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["seniorinsight://auth"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "seniorinsight://auth"
+      }
+    },
+    {
+      "clientId": "si-web",
+      "name": "SeniorInsight Web (BFF do api-gateway)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${SI_WEB_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/login/oauth2/code/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*##http://localhost:3000/*##http://localhost:5173/*"
+      }
+    },
+    {
+      "clientId": "si-identity-service",
+      "name": "SeniorInsight Identity Service",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${SI_IDENTITY_SERVICE_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-si-identity-service",
+      "enabled": true,
+      "serviceAccountClientId": "si-identity-service",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users", "query-groups", "impersonation"]
+      }
+    }
+  ]
 }
