@@ -1,13 +1,13 @@
 # Deploy na VM da Azure (Docker Swarm)
 
-Tudo que chega na `main` de um repositório vai sozinho para a VM `vm-seniorinsight`
+Tudo que chega na `main` de um repositório de backend vai sozinho para a VM `vm-seniorinsight`
 (Azure, East US, Ubuntu 24.04, 2 vCPU / 8 GB + 4 GB de swap).
 
 Endereço público: `https://seniorinsight-api.eastus.cloudapp.azure.com`
 
 | Caminho | Vai para |
 |---|---|
-| `/` | portal si-web |
+| `/` | redireciona para o portal na Vercel (`www.seniorinsight.com.br`) |
 | `/api/**` | api-gateway → serviços |
 | `/login/**`, `/oauth2/**`, `/logout` | api-gateway (BFF do portal) |
 | `/auth/**` | Keycloak (realm `seniorinsight`) |
@@ -15,7 +15,7 @@ Endereço público: `https://seniorinsight-api.eastus.cloudapp.azure.com`
 | `:3443` | portal do Open Wearables |
 | `:9443` | MinIO (só as URLs assinadas dos relatórios) |
 
-O certificado HTTPS é emitido e renovado pelo Caddy.
+O certificado HTTPS é emitido e renovado pelo Caddy. O portal si-web não roda na VM: ele é publicado pela Vercel e chama a API em `https://seniorinsight-api.eastus.cloudapp.azure.com/api`.
 
 ## Como o deploy acontece
 
@@ -41,7 +41,6 @@ push na main do si-infra (deploy/, keycloak/, postgres/)
 | si-insight-service | `insight-service` |
 | si-report-service | `report-service` |
 | si-billing-service | `billing-service` |
-| si-web | `web` |
 
 ## Segredos
 

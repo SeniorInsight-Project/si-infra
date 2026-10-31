@@ -94,15 +94,6 @@ services:
           memory: 64M
     logging: *logging
 
-  web:
-    image: ghcr.io/seniorinsight-project/si-web:main
-    networks: [edge]
-    deploy:
-      resources:
-        limits:
-          memory: 32M
-    logging: *logging
-
   # ---------------------------------------------------------------- infra
   postgres:
     image: postgres:17-alpine
@@ -236,7 +227,8 @@ services:
       BACKEND_CORE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
-      GATEWAY_CORS_ALLOWED_ORIGINS: https://${SI_HOST}
+      # Portal si-web publicado na Vercel.
+      GATEWAY_CORS_ALLOWED_ORIGINS: https://www.seniorinsight.com.br,https://seniorinsight.com.br
     networks: [backend, edge]
     healthcheck: *spring-health
     deploy: *spring-deploy

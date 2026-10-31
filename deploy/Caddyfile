@@ -23,9 +23,9 @@
 		reverse_proxy keycloak:8080
 	}
 
-	# Portal si-web (SPA).
+	# O portal si-web fica na Vercel; a raiz da API leva para ele.
 	handle {
-		reverse_proxy web:80
+		redir https://www.seniorinsight.com.br{uri} 302
 	}
 }
 
