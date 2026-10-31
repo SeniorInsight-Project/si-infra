@@ -80,11 +80,13 @@ services:
       - target: 9443
         published: 9443
         mode: host
+    # Monta a pasta (não o arquivo) para o reload enxergar o Caddyfile novo depois do rsync.
+    command: ["caddy", "run", "--config", "/etc/caddy/si/Caddyfile", "--adapter", "caddyfile"]
     environment:
       SI_HOST: ${SI_HOST}
       SI_ACME_EMAIL: ${SI_ACME_EMAIL}
     volumes:
-      - /opt/seniorinsight/infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/seniorinsight/infra/deploy:/etc/caddy/si:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [edge]
@@ -92,15 +94,6 @@ services:
       resources:
         limits:
           memory: 64M
-    logging: *logging
-
-  web:
-    image: ghcr.io/seniorinsight-project/si-web:main
-    networks: [edge]
-    deploy:
-      resources:
-        limits:
-          memory: 32M
     logging: *logging
 
   # ---------------------------------------------------------------- infra
@@ -236,7 +229,8 @@ services:
       BACKEND_CORE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
-      GATEWAY_CORS_ALLOWED_ORIGINS: https://${SI_HOST}
+      # Portal si-web publicado na Vercel.
+      GATEWAY_CORS_ALLOWED_ORIGINS: https://www.seniorinsight.com.br,https://seniorinsight.com.br
     networks: [backend, edge]
     healthcheck: *spring-health
     deploy: *spring-deploy

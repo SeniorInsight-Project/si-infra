@@ -19,7 +19,7 @@ docker stack deploy --with-registry-auth --prune --resolve-image always \
 # O Caddy lê o Caddyfile na subida: recarrega para pegar mudanças sem derrubar o HTTPS.
 CADDY="$(docker ps -q -f name=seniorinsight_caddy | head -1)"
 if [ -n "$CADDY" ]; then
-  docker exec "$CADDY" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+  docker exec "$CADDY" caddy reload --config /etc/caddy/si/Caddyfile --adapter caddyfile || true
 fi
 
 docker stack services seniorinsight
