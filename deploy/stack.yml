@@ -80,11 +80,13 @@ services:
       - target: 9443
         published: 9443
         mode: host
+    # Monta a pasta (não o arquivo) para o reload enxergar o Caddyfile novo depois do rsync.
+    command: ["caddy", "run", "--config", "/etc/caddy/si/Caddyfile", "--adapter", "caddyfile"]
     environment:
       SI_HOST: ${SI_HOST}
       SI_ACME_EMAIL: ${SI_ACME_EMAIL}
     volumes:
-      - /opt/seniorinsight/infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/seniorinsight/infra/deploy:/etc/caddy/si:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [edge]
