@@ -1,0 +1,44 @@
+# Proxy de borda do SeniorInsight na VM da Azure.
+# O Caddy emite e renova sozinho o certificado HTTPS (Let's Encrypt) para {$SI_HOST}.
+{
+	email {$SI_ACME_EMAIL}
+}
+
+{$SI_HOST} {
+	encode zstd gzip
+
+	# API pública: o api-gateway roteia /api/v1/** para os serviços.
+	handle /api/* {
+		reverse_proxy api-gateway:8080
+	}
+
+	# Login do BFF do portal (OIDC com o Keycloak) também passa pelo gateway.
+	@bff path /login/* /oauth2/* /logout
+	handle @bff {
+		reverse_proxy api-gateway:8080
+	}
+
+	# Keycloak (KC_HTTP_RELATIVE_PATH=/auth).
+	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	# Portal si-web (SPA).
+	handle {
+		reverse_proxy web:80
+	}
+}
+
+# Open Wearables: API e portal do desenvolvedor (si-infra#10).
+{$SI_HOST}:8443 {
+	reverse_proxy ow-app:8000
+}
+
+{$SI_HOST}:3443 {
+	reverse_proxy ow-frontend:3000
+}
+
+# MinIO: só a API S3, para as URLs assinadas dos relatórios (report-service).
+{$SI_HOST}:9443 {
+	reverse_proxy minio:9000
+}
