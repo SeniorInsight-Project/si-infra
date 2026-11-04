@@ -1,7 +1,7 @@
 # VM de testes do app (Expo)
 
 O **si-mobile** não vai para a VM da stack: em produção ele é buildado e publicado nas lojas.
-Para testar, existe uma VM pequena só para ele, `vm-seniorinsight-expo` (B2s, 2 vCPU / 4 GB),
+Para testar, existe uma VM pequena só para ele, `vm-seniorinsight-expo` (D2as_v4, 2 vCPU / 8 GB; a série B não tem capacidade na Azure for Students),
 que roda o servidor do Expo com a `main` do si-mobile.
 
 - QR para o Expo Go: **http://seniorinsight-expo.eastus.cloudapp.azure.com/**

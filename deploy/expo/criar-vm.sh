@@ -11,7 +11,8 @@ RG="${SI_EXPO_RG:-rg-seniorinsight}"
 LOCAL="${SI_EXPO_LOCAL:-eastus}"
 NOME="${SI_EXPO_VM:-vm-seniorinsight-expo}"
 DNS="${SI_EXPO_DNS:-seniorinsight-expo}"
-TAMANHO="${SI_EXPO_TAMANHO:-Standard_B2s}"   # 2 vCPU / 4 GB: o Metro precisa de uns 2 GB no bundle
+TAMANHO="${SI_EXPO_TAMANHO:-Standard_D2as_v4}" # 2 vCPU / 8 GB. Na Azure for Students a serie B fica sem
+                                             # capacidade e as outras familias D tem cota 0 (nov/2026).
 CHAVE="${1:-$HOME/.ssh/id_ed25519.pub}"
 HOST="${DNS}.${LOCAL}.cloudapp.azure.com"
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -40,7 +41,7 @@ az network nsg rule create -g "$RG" --nsg-name "$NSG" -n expo-metro --priority 1
   --access Allow --protocol Tcp --direction Inbound --destination-port-ranges 8081 --output none
 
 echo "== desligamento automático às 02:00 UTC"
-az vm auto-shutdown -g "$RG" -n "$NOME" --time 0200 --output none
+az vm auto-shutdown -g "$RG" -n "$NOME" --time 0200 --location "$LOCAL" --output none
 
 echo
 echo "Pronto. O primeiro boot leva uns 10 minutos (Node, npm ci e primeiro bundle)."
