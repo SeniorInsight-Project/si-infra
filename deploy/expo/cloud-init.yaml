@@ -37,7 +37,8 @@ write_files:
         git clone --depth 1 -b "$SI_MOBILE_BRANCH" https://github.com/SeniorInsight-Project/si-mobile.git
       fi
       cd si-mobile
-      git fetch --depth 1 origin "$SI_MOBILE_BRANCH"
+      # refspec explicito: o clone raso so conhece a branch inicial, e SI_MOBILE_BRANCH pode mudar
+      git fetch --depth 1 origin "+refs/heads/$SI_MOBILE_BRANCH:refs/remotes/origin/$SI_MOBILE_BRANCH"
       git reset --hard "origin/$SI_MOBILE_BRANCH"
       LOCK="$(sha256sum package-lock.json | cut -d' ' -f1)"
       if [ ! -d node_modules ] || [ "$(cat .lock.sha 2>/dev/null)" != "$LOCK" ]; then
