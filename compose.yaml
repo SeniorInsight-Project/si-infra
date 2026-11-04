@@ -55,7 +55,8 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.3
     restart: unless-stopped
-    command: ["start-dev", "--import-realm"]
+    # token-exchange:v1: o identity-service emite os tokens do idoso no pareamento (si-identity-service, ADR 0001).
+    command: ["start-dev", "--import-realm", "--features=token-exchange:v1"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -69,6 +70,13 @@ services:
       KC_HEALTH_ENABLED: "true"
       SI_WEB_CLIENT_SECRET: ${SI_WEB_CLIENT_SECRET:?defina SI_WEB_CLIENT_SECRET no .env}
       SI_IDENTITY_SERVICE_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      # Login com Google: o client ID está no realm; sem o secret no .env, o botão aparece mas o Google recusa.
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-nao-configurado}
+      # Só no ambiente local: redirects do Expo Go (exp://<ip>:8081/--/auth) e do Expo web no client si-mobile.
+      # Em produção (deploy/stack.yml) essas variáveis não existem e o client aceita só seniorinsight://auth.
+      SI_MOBILE_DEV_REDIRECT_EXPO_GO: ${SI_MOBILE_DEV_REDIRECT_EXPO_GO:-exp://*}
+      SI_MOBILE_DEV_REDIRECT_WEB: ${SI_MOBILE_DEV_REDIRECT_WEB:-http://localhost:8081/auth}
+      SI_MOBILE_DEV_WEB_ORIGIN: ${SI_MOBILE_DEV_WEB_ORIGIN:-http://localhost:8081}
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
@@ -134,6 +142,11 @@ services:
       CARE_SERVICE_URI: http://backend-core:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
+      # Serviços ainda fora deste Compose: até entrarem aqui, as rotas deles respondem 5xx.
+      TELEMETRY_SERVICE_URI: http://telemetry-service:8080
+      INSIGHT_SERVICE_URI: http://insight-service:8080
+      REPORT_SERVICE_URI: http://report-service:8080
+      BILLING_SERVICE_URI: http://billing-service:8080
       KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
       GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
@@ -168,12 +181,20 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seniorinsight}
       KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
+      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CARE_SERVICE_URL: http://backend-core:8080
     expose:
       - "8080"
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       keycloak:
         condition: service_started

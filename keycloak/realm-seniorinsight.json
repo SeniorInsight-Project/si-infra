@@ -68,8 +68,12 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["seniorinsight://auth"],
-      "webOrigins": [],
+      "redirectUris": [
+        "seniorinsight://auth",
+        "${SI_MOBILE_DEV_REDIRECT_EXPO_GO:seniorinsight://auth}",
+        "${SI_MOBILE_DEV_REDIRECT_WEB:seniorinsight://auth}"
+      ],
+      "webOrigins": ["${SI_MOBILE_DEV_WEB_ORIGIN:+}"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "seniorinsight://auth"
@@ -108,6 +112,26 @@
       "serviceAccountsEnabled": true,
       "attributes": {
         "standard.token.exchange.enabled": "true"
+      }
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "739066979344-m0f16hkkds0qfvjlh3h70puqan21e2s8.apps.googleusercontent.com",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET:nao-configurado}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
       }
     }
   ],

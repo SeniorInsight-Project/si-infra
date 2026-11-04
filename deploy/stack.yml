@@ -221,6 +221,8 @@ services:
         target: SI_WEB_CLIENT_SECRET
       - source: si_identity_client_secret
         target: SI_IDENTITY_SERVICE_CLIENT_SECRET
+      - source: si_google_client_secret
+        target: GOOGLE_CLIENT_SECRET
     volumes:
       - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
       - /opt/seniorinsight/infra/keycloak/realm-seniorinsight.json:/opt/keycloak/data/import/realm-seniorinsight.json:ro
@@ -243,6 +245,10 @@ services:
       CARE_SERVICE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
+      TELEMETRY_SERVICE_URI: http://telemetry-service:8080
+      INSIGHT_SERVICE_URI: http://insight-service:8080
+      REPORT_SERVICE_URI: http://report-service:8080
+      BILLING_SERVICE_URI: http://billing-service:8080
       # Portal si-web publicado na Vercel.
       GATEWAY_CORS_ALLOWED_ORIGINS: https://www.seniorinsight.com.br,https://seniorinsight.com.br
     networks: [backend, edge]
@@ -278,11 +284,18 @@ services:
       <<: *spring-env
       DB_NAME: identity
       DB_USERNAME: identity
+      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
     secrets:
       - source: si_db_identity_password
         target: DB_PASSWORD
       - source: si_rabbitmq_password
         target: RABBITMQ_PASSWORD
+      - source: si_identity_client_secret
+        target: KEYCLOAK_CLIENT_SECRET
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
@@ -513,14 +526,21 @@ secrets:
     external: true
   si_identity_client_secret:
     external: true
+  # Chaves de terceiros: o nome real vem de /opt/seniorinsight/segredos.env (deploy/scripts/definir-segredos.sh),
+  # para trocar a chave sem editar este arquivo. Sem o arquivo, vale o nome base.
+  si_google_client_secret:
+    external: true
+    name: ${SI_SECRET_GOOGLE:-si_google_client_secret}
   si_minio_root_password:
     external: true
   si_care_jwt_secret:
     external: true
   si_gemini_api_key:
     external: true
+    name: ${SI_SECRET_GEMINI:-si_gemini_api_key}
   si_openwearables_api_key:
     external: true
+    name: ${SI_SECRET_OPENWEARABLES:-si_openwearables_api_key}
   si_ow_db_password:
     external: true
   si_ow_secret_key:
