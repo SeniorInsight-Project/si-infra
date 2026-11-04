@@ -41,6 +41,11 @@ segredo() { # nome valor
 aleatorio() { openssl rand -hex 32; }
 
 segredo si_db_password            "$(aleatorio)"
+# Um usuário de banco por microsserviço (deploy/postgres-init/02-bancos-por-servico.sh).
+# Numa VM que já tinha o banco único, NÃO rode isto antes de deploy/scripts/migrar-bancos-por-servico.sh.
+for s in care identity notification telemetry insight report billing keycloak; do
+  segredo "si_db_${s}_password" "$(aleatorio)"
+done
 segredo si_rabbitmq_password      "$(aleatorio)"
 segredo si_keycloak_admin_password "$(aleatorio)"
 segredo si_web_client_secret      "$(aleatorio)"

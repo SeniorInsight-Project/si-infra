@@ -7,7 +7,7 @@ Endereço público: `https://seniorinsight-api.eastus.cloudapp.azure.com`
 
 | Caminho | Vai para |
 |---|---|
-| `/` | portal si-web |
+| `/` | redireciona para o portal si-web na Vercel |
 | `/api/**` | api-gateway → serviços |
 | `/login/**`, `/oauth2/**`, `/logout` | api-gateway (BFF do portal) |
 | `/auth/**` | Keycloak (realm `seniorinsight`) |
@@ -41,7 +41,34 @@ push na main do si-infra (deploy/, keycloak/, postgres/)
 | si-insight-service | `insight-service` |
 | si-report-service | `report-service` |
 | si-billing-service | `billing-service` |
-| si-web | `web` |
+
+O portal **si-web** não roda na VM: ele é publicado pela Vercel. A URL dele fica em
+`/opt/seniorinsight/si-web-url` na VM e é usada no CORS do gateway e no redirecionamento da raiz.
+O app **si-mobile** também não: para testes ele roda numa VM própria do Expo (`deploy/expo/`).
+
+## Bancos de dados (um por serviço)
+
+Um único Postgres, mas cada microsserviço tem **banco e usuário próprios** e não consegue conectar
+no banco de outro (`CONNECT` revogado de `PUBLIC`). Dado de outro serviço só chega pela API dele ou
+pelos eventos da exchange `si.events`.
+
+| Serviço | Banco / usuário | Schema | Secret da senha |
+|---|---|---|---|
+| care-service | `care` | `public` | `si_db_care_password` |
+| identity-service | `identity` | `identity` | `si_db_identity_password` |
+| notification-service | `notification` | `notification` | `si_db_notification_password` |
+| telemetry-service | `telemetry` | `telemetry` | `si_db_telemetry_password` |
+| insight-service | `insight` | `insight` | `si_db_insight_password` |
+| report-service | `report` | `report` | `si_db_report_password` |
+| billing-service | `billing` | `billing` | `si_db_billing_password` |
+| Keycloak | `keycloak` | `keycloak` | `si_db_keycloak_password` |
+| Open Wearables | `openwearables` | `public` | `si_ow_db_password` |
+
+O usuário `seniorinsight` (`si_db_password`) é o superusuário do Postgres e serve só para administração.
+
+Numa VM nova, os bancos são criados na primeira subida do volume por
+`deploy/postgres-init/02-bancos-por-servico.sh`. A VM que já existia com o banco único foi migrada
+uma vez com `deploy/scripts/migrar-bancos-por-servico.sh` (backup em `/opt/seniorinsight/backup`).
 
 ## Segredos
 

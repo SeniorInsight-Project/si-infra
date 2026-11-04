@@ -7,6 +7,9 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 DESTINO=/opt/seniorinsight/infra
 export SI_HOST="${SI_HOST:-seniorinsight-api.eastus.cloudapp.azure.com}"
 export SI_ACME_EMAIL="${SI_ACME_EMAIL:-luanhsouzaf@gmail.com}"
+# Portal si-web na Vercel: origem liberada no CORS do gateway e destino da raiz do domínio.
+export SI_WEB_URL="${SI_WEB_URL:-$(cat /opt/seniorinsight/si-web-url 2>/dev/null || echo https://github.com/SeniorInsight-Project)}"
+[ -f /opt/seniorinsight/si-web-url ] || echo "::warning::defina a URL do si-web na Vercel em /opt/seniorinsight/si-web-url"
 
 echo "== copiando $REPO para $DESTINO"
 rsync -a --delete --exclude .git --exclude .github "$REPO"/ "$DESTINO"/
