@@ -34,16 +34,18 @@ az vm create \
   --output table
 
 NSG="${NOME}NSG"
-echo "== liberando 80 (página do QR) e 8081 (Metro)"
+echo "== liberando 80/443 (página do QR) e 8081 (Metro)"
 az network nsg rule create -g "$RG" --nsg-name "$NSG" -n expo-pagina --priority 1010 \
   --access Allow --protocol Tcp --direction Inbound --destination-port-ranges 80 --output none
 az network nsg rule create -g "$RG" --nsg-name "$NSG" -n expo-metro --priority 1020 \
   --access Allow --protocol Tcp --direction Inbound --destination-port-ranges 8081 --output none
+az network nsg rule create -g "$RG" --nsg-name "$NSG" -n expo-https --priority 1030 \
+  --access Allow --protocol Tcp --direction Inbound --destination-port-ranges 443 --output none
 
 echo "== desligamento automático às 02:00 UTC"
 az vm auto-shutdown -g "$RG" -n "$NOME" --time 0200 --location "$LOCAL" --output none
 
 echo
 echo "Pronto. O primeiro boot leva uns 10 minutos (Node, npm ci e primeiro bundle)."
-echo "QR do Expo Go: http://${HOST}/   ·   URL: exp://${HOST}:8081"
+echo "QR do Expo Go: https://${HOST}/   ·   URL: exp://${HOST}:8081"
 echo "Para não gastar crédito, desligue quando terminar: az vm deallocate -g $RG -n $NOME"

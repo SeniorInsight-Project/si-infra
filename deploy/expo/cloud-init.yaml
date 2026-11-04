@@ -5,7 +5,7 @@
 # Criada por deploy/expo/criar-vm.sh; o marcador __SI_EXPO_HOST__ e trocado pelo DNS publico.
 
 package_update: true
-packages: [git, qrencode, ca-certificates, curl]
+packages: [git, qrencode, ca-certificates, curl, caddy]
 
 users:
   - default
@@ -86,6 +86,8 @@ write_files:
       [Service]
       User=expo
       EnvironmentFile=/etc/si-expo.env
+      # EXPO_TOKEN da conta Expo (Expo Go no iPhone exige a mesma conta no CLI); gravado a parte, 0600.
+      EnvironmentFile=-/etc/si-expo-token.env
       WorkingDirectory=/opt/expo
       ExecStartPre=/opt/expo/bin/atualizar.sh
       ExecStart=/bin/bash -c 'cd /opt/expo/si-mobile && exec npx expo start --lan --port 8081'
@@ -105,14 +107,22 @@ write_files:
       [Service]
       User=expo
       EnvironmentFile=/etc/si-expo.env
-      AmbientCapabilities=CAP_NET_BIND_SERVICE
       ExecStartPre=+/bin/bash -c 'install -d -o expo -g expo /var/www/expo'
       ExecStartPre=/opt/expo/bin/pagina.sh
-      ExecStart=/usr/bin/python3 -m http.server 80 --directory /var/www/expo
+      ExecStart=/usr/bin/python3 -m http.server 8080 --bind 127.0.0.1 --directory /var/www/expo
       Restart=always
 
       [Install]
       WantedBy=multi-user.target
+
+  # HTTPS da pagina do QR: celulares abrem o endereco como https:// por padrao.
+  # O Caddy emite o certificado (Let's Encrypt) e redireciona a porta 80 para a 443.
+  - path: /etc/caddy/Caddyfile
+    content: |
+      __SI_EXPO_HOST__ {
+      	encode gzip
+      	reverse_proxy 127.0.0.1:8080
+      }
 
   - path: /etc/systemd/system/si-expo-pagina-atualizar.service
     content: |
@@ -142,3 +152,4 @@ runcmd:
   - chown -R expo:expo /opt/expo
   - systemctl daemon-reload
   - systemctl enable --now si-expo-pagina.service si-expo-pagina-atualizar.timer si-expo.service
+  - systemctl restart caddy
