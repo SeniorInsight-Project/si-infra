@@ -55,7 +55,8 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.3
     restart: unless-stopped
-    command: ["start-dev", "--import-realm"]
+    # token-exchange:v1: o identity-service emite os tokens do idoso no pareamento (si-identity-service, ADR 0001).
+    command: ["start-dev", "--import-realm", "--features=token-exchange:v1"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -180,12 +181,20 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seniorinsight}
       KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
+      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CARE_SERVICE_URL: http://backend-core:8080
     expose:
       - "8080"
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       keycloak:
         condition: service_started

@@ -12,4 +12,5 @@ export SI_IDENTITY_SERVICE_CLIENT_SECRET="$(ler SI_IDENTITY_SERVICE_CLIENT_SECRE
 # Client secret do Google (identity provider "google" do realm, ${GOOGLE_CLIENT_SECRET}).
 export GOOGLE_CLIENT_SECRET="$(ler GOOGLE_CLIENT_SECRET)"
 
-exec /opt/keycloak/bin/kc.sh start --import-realm "$@"
+# token-exchange:v1: o identity-service emite os tokens do idoso no pareamento (si-identity-service, ADR 0001).
+exec /opt/keycloak/bin/kc.sh start --import-realm --features=token-exchange:v1 "$@"
