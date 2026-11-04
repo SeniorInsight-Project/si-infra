@@ -1,6 +1,7 @@
 #!/bin/bash
 # Cria a VM de testes do Expo (si-mobile) na Azure. Rodar uma vez, com o Azure CLI logado (az login).
 # Uso: bash deploy/expo/criar-vm.sh [caminho-da-chave-publica-ssh]
+# O cloud-init.yaml precisa ficar so com ASCII: o az codifica o custom-data em latin-1.
 #
 # A VM fica DESLIGADA por padrão para não gastar crédito: ligue só quando for testar
 # (deploy/expo/README.md). Ela também desliga sozinha às 02:00 UTC (23:00 em Brasília).
