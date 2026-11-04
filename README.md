@@ -29,7 +29,7 @@ O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda 
 | Item | Configuração |
 | --- | --- |
 | Papéis | `familiar`, `medico`, `idoso`, `gestor`, `admin`. Quem se cadastra pela tela recebe `familiar` (papel padrão) |
-| `si-mobile` | Público, Authorization Code + PKCE `S256`, redirect `seniorinsight://auth` |
+| `si-mobile` | Público, Authorization Code + PKCE `S256`, redirect `seniorinsight://auth`. No Docker Compose também aceita o Expo Go (`exp://*`) e o Expo web (`http://localhost:8081/auth`, web origin `http://localhost:8081`), via `SI_MOBILE_DEV_*` no `compose.yaml`; no deploy essas variáveis não existem e fica só `seniorinsight://auth` |
 | `si-web` | Confidencial, para o BFF do api-gateway; redirect `http://localhost:8080/login/oauth2/code/*`; secret em `SI_WEB_CLIENT_SECRET` |
 | `si-identity-service` | Confidencial com service account (`manage-users`, `view-users`, `query-users`, `query-groups`, `impersonation` do `realm-management`) e token exchange padrão habilitado; secret em `SI_IDENTITY_SERVICE_CLIENT_SECRET` |
 | Cadastro | Aberto, e-mail como usuário, verificação de e-mail obrigatória, link válido por 24 horas (RF-001) |

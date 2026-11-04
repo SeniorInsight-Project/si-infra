@@ -68,8 +68,12 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["seniorinsight://auth"],
-      "webOrigins": [],
+      "redirectUris": [
+        "seniorinsight://auth",
+        "${SI_MOBILE_DEV_REDIRECT_EXPO_GO:seniorinsight://auth}",
+        "${SI_MOBILE_DEV_REDIRECT_WEB:seniorinsight://auth}"
+      ],
+      "webOrigins": ["${SI_MOBILE_DEV_WEB_ORIGIN:+}"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "seniorinsight://auth"

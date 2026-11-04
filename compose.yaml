@@ -69,6 +69,11 @@ services:
       KC_HEALTH_ENABLED: "true"
       SI_WEB_CLIENT_SECRET: ${SI_WEB_CLIENT_SECRET:?defina SI_WEB_CLIENT_SECRET no .env}
       SI_IDENTITY_SERVICE_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      # Só no ambiente local: redirects do Expo Go (exp://<ip>:8081/--/auth) e do Expo web no client si-mobile.
+      # Em produção (deploy/stack.yml) essas variáveis não existem e o client aceita só seniorinsight://auth.
+      SI_MOBILE_DEV_REDIRECT_EXPO_GO: ${SI_MOBILE_DEV_REDIRECT_EXPO_GO:-exp://*}
+      SI_MOBILE_DEV_REDIRECT_WEB: ${SI_MOBILE_DEV_REDIRECT_WEB:-http://localhost:8081/auth}
+      SI_MOBILE_DEV_WEB_ORIGIN: ${SI_MOBILE_DEV_WEB_ORIGIN:-http://localhost:8081}
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
     volumes:
