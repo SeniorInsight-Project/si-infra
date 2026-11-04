@@ -23,9 +23,9 @@
 		reverse_proxy keycloak:8080
 	}
 
-	# O portal si-web fica na Vercel; a raiz da API leva para ele.
+	# O portal si-web é publicado pela Vercel: quem abrir a raiz é levado para lá.
 	handle {
-		redir https://www.seniorinsight.com.br{uri} 302
+		redir {$SI_WEB_URL}{uri} 302
 	}
 }
 
