@@ -76,12 +76,19 @@ Ficam no Swarm (`docker secret ls`), gerados na própria VM pelo `bootstrap-vm.s
 conhecer as senhas. Os serviços Spring leem `/run/secrets` como `configtree`: um secret montado como
 `DB_PASSWORD` resolve o `${DB_PASSWORD}` do `application.yml`.
 
-Para trocar uma chave de terceiros (ex.: Gemini), na VM:
+### Chaves de terceiros (Google, Gemini, Open Wearables)
+
+São as únicas digitadas por alguém; os valores ficam no Vaultwarden. Para criar ou trocar, na VM:
 
 ```bash
-printf '%s' 'NOVA_CHAVE' | docker secret create si_gemini_api_key_v2 -
-# no stack.yml, aponte o secret para o nome novo (si_gemini_api_key_v2) e faça o deploy do si-infra
+cd ~/si-infra && git pull && bash deploy/scripts/definir-segredos.sh
 ```
+
+O script pede cada chave sem mostrar na tela (Enter em branco pula). Docker secret não pode ser
+alterado, então uma chave que já existe ganha uma versão nova (`si_gemini_api_key_v2`, `_v3`...) e o
+nome em uso fica em `/opt/seniorinsight/segredos.env`. O `deploy-stack.sh` lê esse arquivo e o
+`stack.yml` usa `${SI_SECRET_GEMINI:-si_gemini_api_key}`, então a troca não exige mudar o repositório.
+No fim, o script pergunta se já aplica com o `deploy-stack.sh`.
 
 ## Login com Google
 
@@ -90,11 +97,8 @@ O realm traz o identity provider `google`; o client secret vem do Docker secret 
 (`[prod] Google OAuth client`). Numa VM nova, o `bootstrap-vm.sh` cria o secret com o marcador
 `nao-configurado`; troque pelo valor real antes do primeiro login.
 
-**Antes do deploy que traz esta mudança**, crie o secret na VM; sem ele, `docker stack deploy` falha:
-
-```bash
-read -rsp 'Client secret do Google: ' S && printf '%s' "$S" | docker secret create si_google_client_secret - && unset S
-```
+**Antes do deploy que traz esta mudança**, crie o secret na VM com `deploy/scripts/definir-segredos.sh`
+(seção Segredos); sem ele, `docker stack deploy` falha.
 
 **Na VM que já existia**, o `--import-realm` não reimporta o realm, então o provedor não aparece sozinho.
 Depois do deploy, rode uma vez (cria ou atualiza o provedor pela API admin, lendo o secret montado):
@@ -103,8 +107,8 @@ Depois do deploy, rode uma vez (cria ou atualiza o provedor pela API admin, lend
 bash deploy/scripts/configurar-login-google.sh
 ```
 
-Para trocar o secret: crie `si_google_client_secret_v2`, aponte o `stack.yml` para ele, faça o deploy e rode
-o script de novo. Redirect URI cadastrado no Google:
+Para trocar o secret: rode o `definir-segredos.sh` de novo (cria a versão nova e faz o deploy) e depois
+o `configurar-login-google.sh`. Redirect URI cadastrado no Google:
 `https://seniorinsight-api.eastus.cloudapp.azure.com/auth/realms/seniorinsight/broker/google/endpoint`.
 
 ## Preparação da VM (já feita; repetir só numa VM nova)

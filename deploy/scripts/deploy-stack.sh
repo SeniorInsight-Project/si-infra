@@ -10,6 +10,8 @@ export SI_ACME_EMAIL="${SI_ACME_EMAIL:-luanhsouzaf@gmail.com}"
 # Portal si-web na Vercel: origem liberada no CORS do gateway e destino da raiz do domínio.
 export SI_WEB_URL="${SI_WEB_URL:-$(cat /opt/seniorinsight/si-web-url 2>/dev/null || echo https://github.com/SeniorInsight-Project)}"
 [ -f /opt/seniorinsight/si-web-url ] || echo "::warning::defina a URL do si-web na Vercel em /opt/seniorinsight/si-web-url"
+# Nome atual de cada Docker secret de terceiros (SI_SECRET_*), mantido por deploy/scripts/definir-segredos.sh.
+if [ -f /opt/seniorinsight/segredos.env ]; then set -a; . /opt/seniorinsight/segredos.env; set +a; fi
 
 echo "== copiando $REPO para $DESTINO"
 rsync -a --delete --exclude .git --exclude .github "$REPO"/ "$DESTINO"/

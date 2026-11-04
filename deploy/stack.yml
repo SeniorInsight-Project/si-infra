@@ -519,16 +519,21 @@ secrets:
     external: true
   si_identity_client_secret:
     external: true
+  # Chaves de terceiros: o nome real vem de /opt/seniorinsight/segredos.env (deploy/scripts/definir-segredos.sh),
+  # para trocar a chave sem editar este arquivo. Sem o arquivo, vale o nome base.
   si_google_client_secret:
     external: true
+    name: ${SI_SECRET_GOOGLE:-si_google_client_secret}
   si_minio_root_password:
     external: true
   si_care_jwt_secret:
     external: true
   si_gemini_api_key:
     external: true
+    name: ${SI_SECRET_GEMINI:-si_gemini_api_key}
   si_openwearables_api_key:
     external: true
+    name: ${SI_SECRET_OPENWEARABLES:-si_openwearables_api_key}
   si_ow_db_password:
     external: true
   si_ow_secret_key:
