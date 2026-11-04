@@ -1,0 +1,143 @@
+#cloud-config
+# VM de testes do app si-mobile: roda o servidor do Expo (Metro) com a main do si-mobile.
+# Qualquer pessoa abre o Expo Go, escaneia o QR de http://<host>/ e testa o app.
+# A cada vez que a VM liga, ela baixa a main mais recente antes de subir o Expo.
+# Criada por deploy/expo/criar-vm.sh; o marcador __SI_EXPO_HOST__ é trocado pelo DNS público.
+
+package_update: true
+packages: [git, qrencode, ca-certificates, curl]
+
+users:
+  - default
+  - name: expo
+    shell: /bin/bash
+    homedir: /opt/expo
+
+write_files:
+  - path: /etc/si-expo.env
+    permissions: "0644"
+    content: |
+      # Endereço público que vai no QR (exp://HOST:8081) e base da API usada pelo app.
+      SI_EXPO_HOST=__SI_EXPO_HOST__
+      REACT_NATIVE_PACKAGER_HOSTNAME=__SI_EXPO_HOST__
+      EXPO_PUBLIC_API_BASE_URL=https://seniorinsight-api.eastus.cloudapp.azure.com
+      SI_MOBILE_BRANCH=main
+      CI=1
+      EXPO_NO_TELEMETRY=1
+      NODE_OPTIONS=--max-old-space-size=2560
+
+  - path: /opt/expo/bin/atualizar.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Baixa a branch configurada do si-mobile e instala as dependências quando o lock muda.
+      set -euo pipefail
+      cd /opt/expo
+      if [ ! -d si-mobile/.git ]; then
+        git clone --depth 1 -b "$SI_MOBILE_BRANCH" https://github.com/SeniorInsight-Project/si-mobile.git
+      fi
+      cd si-mobile
+      git fetch --depth 1 origin "$SI_MOBILE_BRANCH"
+      git reset --hard "origin/$SI_MOBILE_BRANCH"
+      LOCK="$(sha256sum package-lock.json | cut -d' ' -f1)"
+      if [ ! -d node_modules ] || [ "$(cat .lock.sha 2>/dev/null)" != "$LOCK" ]; then
+        npm ci --no-audit --no-fund
+        echo "$LOCK" > .lock.sha
+      fi
+      echo "si-mobile em $(git log -1 --format='%h %s')"
+
+  - path: /opt/expo/bin/pagina.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Gera a página com o QR do Expo Go (http://HOST/).
+      set -euo pipefail
+      URL="exp://${SI_EXPO_HOST}:8081"
+      COMMIT="$(git -C /opt/expo/si-mobile log -1 --format='%h · %s · %cd' --date=format:'%d/%m %H:%M' 2>/dev/null || echo 'carregando…')"
+      if curl -fsS -m 3 http://127.0.0.1:8081/status 2>/dev/null | grep -q running; then
+        ESTADO="no ar"; COR="#1a7f37"
+      else
+        ESTADO="iniciando (pode levar alguns minutos depois de ligar a VM)"; COR="#9a6700"
+      fi
+      QR="$(qrencode -t SVG -m 1 -s 8 -o - "$URL")"
+      mkdir -p /var/www/expo
+      cat > /var/www/expo/index.html.tmp <<HTML
+      <!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="refresh" content="20"><title>SeniorInsight · Expo</title>
+      <style>body{font-family:system-ui,sans-serif;max-width:420px;margin:32px auto;padding:0 16px;color:#1f2328;background:#fff}
+      .qr svg{width:100%;height:auto}code{background:#f6f8fa;padding:2px 6px;border-radius:4px;word-break:break-all}</style></head>
+      <body><h1>SeniorInsight · app de testes</h1>
+      <p>Estado: <strong style="color:${COR}">${ESTADO}</strong></p>
+      <div class="qr">${QR}</div>
+      <p>Abra o <strong>Expo Go</strong> (Android: escaneie pelo app; iPhone: pela câmera) ou digite <code>${URL}</code>.</p>
+      <p><small>Versão: ${COMMIT}</small></p></body></html>
+      HTML
+      mv /var/www/expo/index.html.tmp /var/www/expo/index.html
+
+  - path: /etc/systemd/system/si-expo.service
+    content: |
+      [Unit]
+      Description=Expo (Metro) do si-mobile
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      User=expo
+      EnvironmentFile=/etc/si-expo.env
+      WorkingDirectory=/opt/expo
+      ExecStartPre=/opt/expo/bin/atualizar.sh
+      ExecStart=/bin/bash -c 'cd /opt/expo/si-mobile && exec npx expo start --lan --port 8081'
+      Restart=always
+      RestartSec=15
+      TimeoutStartSec=900
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/si-expo-pagina.service
+    content: |
+      [Unit]
+      Description=Página com o QR do Expo
+      After=network-online.target
+
+      [Service]
+      User=expo
+      EnvironmentFile=/etc/si-expo.env
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+      ExecStartPre=+/bin/bash -c 'install -d -o expo -g expo /var/www/expo'
+      ExecStartPre=/opt/expo/bin/pagina.sh
+      ExecStart=/usr/bin/python3 -m http.server 80 --directory /var/www/expo
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/si-expo-pagina-atualizar.service
+    content: |
+      [Unit]
+      Description=Atualiza a página do QR do Expo
+      [Service]
+      Type=oneshot
+      User=expo
+      EnvironmentFile=/etc/si-expo.env
+      ExecStart=/opt/expo/bin/pagina.sh
+
+  - path: /etc/systemd/system/si-expo-pagina-atualizar.timer
+    content: |
+      [Unit]
+      Description=Atualiza a página do QR do Expo a cada 30 s
+      [Timer]
+      OnBootSec=30
+      OnUnitActiveSec=30
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  # 4 GB de RAM: a swap evita que o npm ci e o primeiro bundle do Metro estourem a memória.
+  - [bash, -c, "fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab"]
+  - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  - apt-get install -y nodejs
+  - chown -R expo:expo /opt/expo
+  - systemctl daemon-reload
+  - systemctl enable --now si-expo-pagina.service si-expo-pagina-atualizar.timer si-expo.service
