@@ -221,6 +221,8 @@ services:
         target: SI_WEB_CLIENT_SECRET
       - source: si_identity_client_secret
         target: SI_IDENTITY_SERVICE_CLIENT_SECRET
+      - source: si_google_client_secret
+        target: GOOGLE_CLIENT_SECRET
     volumes:
       - /opt/seniorinsight/infra/deploy/entrypoints:/opt/si/entrypoints:ro
       - /opt/seniorinsight/infra/keycloak/realm-seniorinsight.json:/opt/keycloak/data/import/realm-seniorinsight.json:ro
@@ -516,6 +518,8 @@ secrets:
   si_web_client_secret:
     external: true
   si_identity_client_secret:
+    external: true
+  si_google_client_secret:
     external: true
   si_minio_root_password:
     external: true

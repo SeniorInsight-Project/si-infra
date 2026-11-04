@@ -83,6 +83,30 @@ printf '%s' 'NOVA_CHAVE' | docker secret create si_gemini_api_key_v2 -
 # no stack.yml, aponte o secret para o nome novo (si_gemini_api_key_v2) e faça o deploy do si-infra
 ```
 
+## Login com Google
+
+O realm traz o identity provider `google`; o client secret vem do Docker secret `si_google_client_secret`
+(lido pelo `deploy/entrypoints/keycloak.sh` como `GOOGLE_CLIENT_SECRET`). O valor está no Vaultwarden
+(`[prod] Google OAuth client`). Numa VM nova, o `bootstrap-vm.sh` cria o secret com o marcador
+`nao-configurado`; troque pelo valor real antes do primeiro login.
+
+**Antes do deploy que traz esta mudança**, crie o secret na VM; sem ele, `docker stack deploy` falha:
+
+```bash
+read -rsp 'Client secret do Google: ' S && printf '%s' "$S" | docker secret create si_google_client_secret - && unset S
+```
+
+**Na VM que já existia**, o `--import-realm` não reimporta o realm, então o provedor não aparece sozinho.
+Depois do deploy, rode uma vez (cria ou atualiza o provedor pela API admin, lendo o secret montado):
+
+```bash
+bash deploy/scripts/configurar-login-google.sh
+```
+
+Para trocar o secret: crie `si_google_client_secret_v2`, aponte o `stack.yml` para ele, faça o deploy e rode
+o script de novo. Redirect URI cadastrado no Google:
+`https://seniorinsight-api.eastus.cloudapp.azure.com/auth/realms/seniorinsight/broker/google/endpoint`.
+
 ## Preparação da VM (já feita; repetir só numa VM nova)
 
 ```bash

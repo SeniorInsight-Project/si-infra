@@ -115,6 +115,26 @@
       }
     }
   ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "739066979344-m0f16hkkds0qfvjlh3h70puqan21e2s8.apps.googleusercontent.com",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET:nao-configurado}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
+      }
+    }
+  ],
   "users": [
     {
       "username": "service-account-si-identity-service",

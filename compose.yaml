@@ -69,6 +69,8 @@ services:
       KC_HEALTH_ENABLED: "true"
       SI_WEB_CLIENT_SECRET: ${SI_WEB_CLIENT_SECRET:?defina SI_WEB_CLIENT_SECRET no .env}
       SI_IDENTITY_SERVICE_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      # Login com Google: o client ID está no realm; sem o secret no .env, o botão aparece mas o Google recusa.
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-nao-configurado}
       # Só no ambiente local: redirects do Expo Go (exp://<ip>:8081/--/auth) e do Expo web no client si-mobile.
       # Em produção (deploy/stack.yml) essas variáveis não existem e o client aceita só seniorinsight://auth.
       SI_MOBILE_DEV_REDIRECT_EXPO_GO: ${SI_MOBILE_DEV_REDIRECT_EXPO_GO:-exp://*}
