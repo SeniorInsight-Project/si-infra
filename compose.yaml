@@ -139,6 +139,11 @@ services:
       CARE_SERVICE_URI: http://backend-core:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
+      # Serviços ainda fora deste Compose: até entrarem aqui, as rotas deles respondem 5xx.
+      TELEMETRY_SERVICE_URI: http://telemetry-service:8080
+      INSIGHT_SERVICE_URI: http://insight-service:8080
+      REPORT_SERVICE_URI: http://report-service:8080
+      BILLING_SERVICE_URI: http://billing-service:8080
       KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
       GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
