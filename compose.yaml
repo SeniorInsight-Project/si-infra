@@ -131,12 +131,12 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
-      BACKEND_CORE_URI: http://backend-core:8080
+      CARE_SERVICE_URI: http://backend-core:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
       KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
-      GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:

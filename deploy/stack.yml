@@ -238,10 +238,10 @@ services:
     image: ghcr.io/seniorinsight-project/si-api-gateway:main
     environment:
       <<: *spring-env
-      BACKEND_CORE_URI: http://care-service:8080
+      CARE_SERVICE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
-      GATEWAY_CORS_ALLOWED_ORIGINS: ${SI_WEB_URL}
+      GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-https://www.seniorinsight.com.br,http://localhost:8081}
     networks: [backend, edge]
     healthcheck: *spring-health
     deploy: *spring-deploy
