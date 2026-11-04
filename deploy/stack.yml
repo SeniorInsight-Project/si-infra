@@ -278,11 +278,18 @@ services:
       <<: *spring-env
       DB_NAME: identity
       DB_USERNAME: identity
+      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
     secrets:
       - source: si_db_identity_password
         target: DB_PASSWORD
       - source: si_rabbitmq_password
         target: RABBITMQ_PASSWORD
+      - source: si_identity_client_secret
+        target: KEYCLOAK_CLIENT_SECRET
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
