@@ -23,9 +23,9 @@
 		reverse_proxy keycloak:8080
 	}
 
-	# Portal si-web (SPA).
+	# O portal si-web é publicado pela Vercel: quem abrir a raiz é levado para lá.
 	handle {
-		reverse_proxy web:80
+		redir {$SI_WEB_URL} 302
 	}
 }
 
