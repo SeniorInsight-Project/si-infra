@@ -11,7 +11,11 @@ if ! docker service inspect "$SERVICO" >/dev/null 2>&1; then
   exit 1
 fi
 
-docker service update --quiet --with-registry-auth --image "$IMAGEM" "$SERVICO"
+# As imagens do GHCR são públicas. Remove qualquer credencial antiga do ghcr.io: um token
+# expirado salvo na VM faz o registry responder "denied" até para pacote público.
+docker logout ghcr.io >/dev/null 2>&1 || true
+
+docker service update --quiet --image "$IMAGEM" "$SERVICO"
 
 # Espera até 6 minutos: os serviços Java demoram a ficar saudáveis na VM.
 for _ in $(seq 1 72); do

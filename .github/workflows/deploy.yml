@@ -17,9 +17,9 @@ concurrency:
   group: deploy-azure
   cancel-in-progress: false
 
+# As imagens do GHCR são públicas: o pull na VM é anônimo, sem docker login.
 permissions:
   contents: read
-  packages: read
 
 jobs:
   deploy:
@@ -27,7 +27,5 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Login no GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Atualizar a stack
         run: bash deploy/scripts/deploy-stack.sh
