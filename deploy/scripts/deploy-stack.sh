@@ -18,7 +18,11 @@ rsync -a --delete --exclude .git --exclude .github "$REPO"/ "$DESTINO"/
 chmod +x "$DESTINO"/deploy/entrypoints/*.sh "$DESTINO"/deploy/postgres-init/*.sh
 
 echo "== docker stack deploy"
-docker stack deploy --with-registry-auth --prune --resolve-image always \
+# As imagens do GHCR são públicas. Remove qualquer credencial antiga do ghcr.io: um token
+# expirado salvo na VM faz o registry responder "denied" até para pacote público.
+docker logout ghcr.io >/dev/null 2>&1 || true
+
+docker stack deploy --prune --resolve-image always \
   -c "$DESTINO/deploy/stack.yml" seniorinsight
 
 # O Caddy lê o Caddyfile na subida: recarrega para pegar mudanças sem derrubar o HTTPS.

@@ -65,11 +65,10 @@ jobs:
     concurrency:
       group: deploy-azure
       cancel-in-progress: false
+    # Sem docker login: as imagens são públicas e o Swarm faz o pull anônimo. Um GITHUB_TOKEN
+    # salvo na VM expira com o job e passa a bloquear o pull até de pacote público.
     permissions:
       contents: read
-      packages: read
     steps:
-      - name: Login no GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Atualizar o serviço na stack
         run: bash /opt/seniorinsight/infra/deploy/scripts/deploy-servico.sh "${{ inputs.servico }}" "${{ needs.build.outputs.imagem }}"
