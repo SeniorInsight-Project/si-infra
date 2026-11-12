@@ -242,6 +242,8 @@ services:
     image: ghcr.io/seniorinsight-project/si-api-gateway:main
     environment:
       <<: *spring-env
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
       CARE_SERVICE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
@@ -263,7 +265,6 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/care
       JDBC_DATABASE_USERNAME: care
-      REDIS_URL: redis://redis:6379
       OPENWEARABLES_ENABLED: "true"
       OPENWEARABLES_BASE_URL: http://ow-app:8000
     secrets:
