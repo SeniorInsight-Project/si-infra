@@ -134,11 +134,13 @@ services:
 
   api-gateway:
     build:
-      context: ../si-api-gateway-main
+      context: ../si-api-gateway-develop
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       CARE_SERVICE_URI: http://backend-core:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
@@ -161,7 +163,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
-
+      redis:
+        condition: service_healthy
   identity-service:
     build:
       context: ../si-identity-service-develop
