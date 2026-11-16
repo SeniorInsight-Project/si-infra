@@ -9,6 +9,8 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "rememberMe": false,
+  "ssoSessionIdleTimeout": 2592000,
+  "ssoSessionMaxLifespan": 31536000,
   "actionTokenGeneratedByUserLifespan": 86400,
   "attributes": {
     "actionTokenGeneratedByUserLifespan.verify-email": "86400"
@@ -76,7 +78,9 @@
       "webOrigins": ["${SI_MOBILE_DEV_WEB_ORIGIN:+}"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "seniorinsight://auth"
+        "post.logout.redirect.uris": "seniorinsight://auth",
+        "client.session.idle.timeout": "1800",
+        "client.session.max.lifespan": "36000"
       }
     },
     {
@@ -95,7 +99,9 @@
       "webOrigins": ["+"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8080/*##http://localhost:3000/*##http://localhost:5173/*"
+        "post.logout.redirect.uris": "http://localhost:8080/*##http://localhost:3000/*##http://localhost:5173/*",
+        "client.session.idle.timeout": "1800",
+        "client.session.max.lifespan": "36000"
       }
     },
     {
