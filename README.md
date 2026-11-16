@@ -22,7 +22,7 @@ Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branch
    - Conta do usuário no realm: http://localhost:8180/realms/seniorinsight/account;
    - Mailpit (caixa de entrada de desenvolvimento): http://localhost:8025. O Keycloak envia por SMTP para `mailpit:1025`; nenhum e-mail sai da máquina.
 
-O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda não existe no banco. Depois de alterar o arquivo, recrie o banco com `docker compose down -v` ou apague o realm pelo console antes de subir de novo. Os secrets dos clients vêm das variáveis de ambiente do container (`${SI_WEB_CLIENT_SECRET}` no JSON).
+O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda não existe no banco. Depois de alterar o arquivo, recrie o banco com `docker compose down -v` ou apague o realm pelo console antes de subir de novo (para atualizar apenas os tempos de sessão sem apagar o banco, rode `bash deploy/scripts/configurar-tempos-de-sessao.sh`). Os secrets dos clients vêm das variáveis de ambiente do container (`${SI_WEB_CLIENT_SECRET}` no JSON).
 
 ### O que o realm configura
 
@@ -37,6 +37,7 @@ O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda 
 | Login com Google | Identity provider `google` (OAuth client do projeto `seniorinsight-auth` no Google Cloud). E-mail do Google tratado como verificado (*trust email*) e quem entra recebe `familiar`. Client ID no realm; secret em `GOOGLE_CLIENT_SECRET` (no `.env`, valor no Vaultwarden) |
 | Política de senha | Mínimo de 10 caracteres, ao menos uma letra e um número, diferente do e-mail (HU-001) |
 | Força bruta | 5 erros em 15 minutos bloqueiam a conta por 15 minutos (RF-002) |
+| Tempos de sessão | Realm: 30 dias de ociosidade (`2592000` s) e 365 dias no máximo (`31536000` s), herdados pelo `si-identity-service` (sessão do idoso). `si-mobile` e `si-web` sobrescrevem para 30 min (`1800` s) e 10 h (`36000` s) |
 | Idioma | Tema `seniorinsight` (pasta `keycloak/themes/seniorinsight`), pt-BR padrão e inglês opcional |
 
 ### Como testar

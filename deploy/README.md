@@ -111,6 +111,20 @@ Para trocar o secret: rode o `definir-segredos.sh` de novo (cria a versão nova 
 o `configurar-login-google.sh`. Redirect URI cadastrado no Google:
 `https://seniorinsight-api.eastus.cloudapp.azure.com/auth/realms/seniorinsight/broker/google/endpoint`.
 
+## Tempos de sessão do realm
+
+O realm define 30 dias de ociosidade (`ssoSessionIdleTimeout = 2592000`) e 365 dias no máximo
+(`ssoSessionMaxLifespan = 31536000`) para que o token do aparelho do idoso (emitido via token exchange
+no `si-identity-service`) não expire em 30 minutos. Os clients `si-mobile` e `si-web` mantêm 30 min
+(`1800`) e 10 h (`36000`) via `client.session.idle.timeout` e `client.session.max.lifespan`.
+
+**Na VM que já existia**, o `--import-realm` não reaplica alterações do JSON. Depois do deploy, rode
+uma vez (lê os valores direto de `keycloak/realm-seniorinsight.json` e aplica via `kcadm`):
+
+```bash
+bash deploy/scripts/configurar-tempos-de-sessao.sh
+```
+
 ## Preparação da VM (já feita; repetir só numa VM nova)
 
 ```bash
