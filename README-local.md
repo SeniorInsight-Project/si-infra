@@ -1,6 +1,6 @@
 # si-infra
 
-Infraestrutura: docker-compose local (PostgreSQL, Redis, RabbitMQ, Keycloak, Open Wearables, Grafana), configuração do realm Keycloak e scripts de deploy.
+Infraestrutura: docker-compose local (PostgreSQL, Redis, RabbitMQ, Keycloak, MinIO, Mailpit, Open Wearables), configuração do realm Keycloak e scripts de deploy.
 
 Parte do SeniorInsight — ver o Documento de Arquitetura de Software (seção 6) para as convenções.
 
@@ -8,32 +8,100 @@ Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branch
 
 ## Ambiente local
 
-Este repositório é o ponto de entrada do Docker Compose local. Os contextos de build apontam para os repositórios irmãos; os Dockerfiles permanecem junto ao código de cada serviço.
+Este repositório é o ponto de entrada do Docker Compose local. Os contextos de build apontam para os repositórios irmãos, e os Dockerfiles ficam junto ao código de cada serviço. O equivalente de produção é `deploy/stack.yml`.
 
-1. Copie `.env.example` para `.env` e ajuste as credenciais locais, se necessário.
-2. Na raiz de `si-infra-main`, execute:
+### 1. Clonar os repositórios lado a lado
 
-   ```bash
-   docker compose up --build
-   ```
+Os builds usam `../si-<repo>`, então os repositórios precisam estar na mesma pasta que o `si-infra`, com o nome original:
 
-   No PowerShell, use `Copy-Item .env.example .env` para criar o arquivo de ambiente.
+```bash
+for r in si-infra si-api-gateway si-care-service si-identity-service si-notification-service \
+         si-telemetry-service si-insight-service si-report-service si-billing-service; do
+  git clone -b develop https://github.com/SeniorInsight-Project/$r.git
+done
+```
 
-3. Para encerrar sem apagar os dados, execute `docker compose down`. Para recriar os bancos do zero, execute `docker compose down -v`.
+```
+pasta/
+├── si-infra/            <- rode o docker compose aqui
+├── si-api-gateway/
+├── si-care-service/
+├── si-identity-service/
+├── si-notification-service/
+├── si-telemetry-service/
+├── si-insight-service/
+├── si-report-service/
+└── si-billing-service/
+```
 
-O Compose atual inclui PostgreSQL 17, Redis 7, RabbitMQ 3.13, Keycloak 26, `backend-core`, `identity-service` e `api-gateway`. A única aplicação publicada no host é o gateway (porta padrão `8080`); os serviços backend ficam na rede interna do Compose. PostgreSQL contém os schemas dos serviços e `keycloak`; o volume de inicialização cria o schema Keycloak em uma instalação nova.
+### 2. Configurar o `.env`
 
-O realm `seniorinsight` é importado de `keycloak/realm-seniorinsight.json`. A URL de issuer usada nos tokens locais é `http://localhost:8180/realms/seniorinsight`; o `identity-service` usa o endereço interno do container apenas para buscar as chaves JWKS e valida o issuer público. Os clients OIDC, o cadastro, a política de senha e o Mailpit estão descritos na seção "Keycloak local" do `README.md`.
+Copie `.env.example` para `.env` (no PowerShell, `Copy-Item .env.example .env`) e troque pelo menos:
 
-O gateway encaminha `/api/v1/**` para o `backend-core` e `/api/v1/identity/**` para o `identity-service`, convertendo este último para a rota interna `/v1/**`. O `backend-core` ainda usa JWT HMAC próprio; o gateway só exige JWT Keycloak nas rotas de identidade para não quebrar o fluxo atual. O serviço de notificações ainda não tem aplicação ou Dockerfile. Open Wearables, Grafana e MinIO também não foram incluídos: não há configuração de execução local desses componentes nos repositórios disponíveis, e o backend atual deixa a integração Open Wearables desativada por padrão.
+- `SI_WEB_CLIENT_SECRET` e `SI_IDENTITY_SERVICE_CLIENT_SECRET` (ex.: `openssl rand -hex 32`);
+- `OPENWEARABLES_VINCULO_SECRET`: pelo menos 32 bytes e nunca trocado depois de haver vínculos.
 
-### Próximos passos de segurança
+O Compose não sobe sem essas três variáveis.
 
-1. Migrar a autenticação própria do `backend-core` para Keycloak com transição coordenada de emissão, leitura e renovação de tokens.
-2. Depois da migração, exigir JWT Keycloak em todas as rotas de negócio no gateway, configurar validação de roles/audience e remover o JWT HMAC legado no backend.
-3. Completar os fluxos de login nos canais usando os clients `si-mobile` e `si-web` do realm local.
-4. Definir a política de rate limit por rota/usuário antes de ativar o Redis RateLimiter.
-5. Implementar o BFF do portal como mudança separada, incluindo sessão `HttpOnly`, proteção CSRF e cliente OIDC confidencial.
+### 3. Subir
+
+```bash
+docker compose up -d --build
+```
+
+Para encerrar sem apagar os dados, `docker compose down`. Para recriar bancos, filas e arquivos do zero, `docker compose down -v`.
+
+> **Volume antigo:** até esta versão todos os serviços usavam o banco único `seniorinsight`. Os bancos por serviço só são criados num volume novo do Postgres, então quem já tinha o ambiente precisa rodar `docker compose down -v` uma vez.
+
+### O que sobe
+
+| Serviço | Acesso no host | Observação |
+| --- | --- | --- |
+| `api-gateway` | http://localhost:8080 (`GATEWAY_PORT`) | Única aplicação publicada. Sobe sem esperar os serviços: com um serviço fora do ar, só as rotas dele respondem 5xx |
+| `care-service`, `identity-service`, `notification-service`, `telemetry-service`, `insight-service`, `report-service`, `billing-service` | só pela rede interna | Acessados pelo gateway |
+| `keycloak` | http://localhost:8180 | Realm `seniorinsight` (ver "Keycloak local" no `README.md`) |
+| `postgres` | `localhost:5432` | Um banco e um usuário por serviço |
+| `rabbitmq` | `localhost:5672`, painel em http://localhost:15672 | Exchange `si.events` |
+| `redis` | `localhost:6379` | Rate limit do gateway e caches |
+| `minio` | API em http://localhost:9000, console em http://localhost:9001 | PDFs do report-service, bucket `si-reports` (criado pelo serviço) |
+| `mailpit` | http://localhost:8025 | SMTP do Keycloak, do notification e do report; nenhum e-mail sai da máquina |
+
+Todos os serviços validam o token do Keycloak com o issuer público `http://localhost:8180/realms/seniorinsight` (o que vai no token) e buscam as chaves pela rede interna, em `http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs` (`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI`).
+
+### Bancos
+
+`postgres/init/02-bancos-por-servico.sh` roda só na primeira subida do volume e cria os bancos e usuários `care`, `identity`, `notification`, `telemetry`, `insight`, `report`, `billing`, `keycloak` (com o schema `keycloak`) e `openwearables`. Como em produção (`deploy/postgres-init/02-bancos-por-servico.sh`), um serviço não conecta no banco de outro. A diferença é a senha: localmente todos usam `DB_PASSWORD`. O usuário `DB_USERNAME` fica só para administração.
+
+### Open Wearables (profile `ow`)
+
+Fica fora da subida padrão. Para incluir a API (http://localhost:8000) e o portal (http://localhost:3000):
+
+```bash
+docker compose --profile ow up -d
+```
+
+1. Entre no portal com `OW_ADMIN_EMAIL` e `OW_ADMIN_PASSWORD` e crie uma API key.
+2. No `.env`, preencha `OPENWEARABLES_API_KEY` e troque `OPENWEARABLES_ENABLED` para `true`.
+3. Recrie o telemetry: `docker compose --profile ow up -d telemetry-service`.
+
+Sem o profile, deixe `OPENWEARABLES_ENABLED=false`: o telemetry sobe normalmente e não coleta.
+
+### Score com o Gemini
+
+O `insight-service` sobe com o Score desligado. Para ligar, preencha no `.env` `GEMINI_API_KEY`, `INSIGHT_GEMINI_ENABLED=true` e teto diário e tarifas maiores que zero (`INSIGHT_GEMINI_TETO_DIARIO_MICROS`, `INSIGHT_GEMINI_PRECO_ENTRADA`, `INSIGHT_GEMINI_PRECO_SAIDA`). Com teto ou tarifa zerados, o serviço não chama o modelo. O `.env.example` traz um exemplo de valores.
+
+### Subir só uma parte
+
+Os serviços de negócio dependem só da infraestrutura, não uns dos outros. Para trabalhar num serviço rodando fora do Docker, suba só o que ele usa, por exemplo:
+
+```bash
+docker compose up -d postgres rabbitmq redis keycloak mailpit minio
+```
+
+### Limitações conhecidas
+
+- As chamadas para `/internal/**` do care-service (vínculo, rede do idoso, contexto do Score) ainda não funcionam: faltam as rotas no care, a role `servico-interno` no realm e os clients de serviço.
+- O login do portal depende do BFF no gateway, que ainda não existe.
 
 ## Kanban da organização
 

@@ -1,16 +1,20 @@
 # si-infra
 
-Infraestrutura: docker-compose local (PostgreSQL, Redis, RabbitMQ, Keycloak, Open Wearables, Grafana), configuração do realm Keycloak e scripts de deploy.
+Infraestrutura: docker-compose local (PostgreSQL, Redis, RabbitMQ, Keycloak, MinIO, Mailpit, Open Wearables), configuração do realm Keycloak e scripts de deploy.
 
 Parte do SeniorInsight — ver o Documento de Arquitetura de Software (seção 6) para as convenções.
 
 Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branches curtas por issue e abra PR para `develop`.
 
+## Ambiente local completo
+
+O `compose.yaml` sobe a infraestrutura e todos os serviços (gateway, care, identity, notification, telemetry, insight, report e billing), com um banco por serviço, MinIO, Mailpit e o Open Wearables num profile opcional (`ow`). Os builds usam os repositórios clonados lado a lado (`../si-<repo>`). Passo a passo, portas e limitações em [README-local.md](README-local.md).
+
 ## Keycloak local (realm `seniorinsight`)
 
 ### Como subir
 
-1. Copie `.env.example` para `.env` e troque os valores de `SI_WEB_CLIENT_SECRET` e `SI_IDENTITY_SERVICE_CLIENT_SECRET` (por exemplo, `openssl rand -hex 32`). O Compose não sobe sem essas variáveis.
+1. Copie `.env.example` para `.env` e troque os valores de `SI_WEB_CLIENT_SECRET`, `SI_IDENTITY_SERVICE_CLIENT_SECRET` e `OPENWEARABLES_VINCULO_SECRET` (por exemplo, `openssl rand -hex 32`). O Compose não sobe sem essas variáveis.
 2. Para subir só a parte de identidade, sem os repositórios irmãos:
 
    ```bash
@@ -22,7 +26,7 @@ Branches: `main` (principal, protegida) e `develop` (testes). Trabalhe em branch
    - Conta do usuário no realm: http://localhost:8180/realms/seniorinsight/account;
    - Mailpit (caixa de entrada de desenvolvimento): http://localhost:8025. O Keycloak envia por SMTP para `mailpit:1025`; nenhum e-mail sai da máquina.
 
-O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda não existe no banco. Depois de alterar o arquivo, recrie o banco com `docker compose down -v` ou apague o realm pelo console antes de subir de novo (para atualizar apenas os tempos de sessão sem apagar o banco, rode `bash deploy/scripts/configurar-tempos-de-sessao.sh`). Os secrets dos clients vêm das variáveis de ambiente do container (`${SI_WEB_CLIENT_SECRET}` no JSON).
+O Keycloak usa o banco `keycloak` (schema `keycloak`), criado por `postgres/init/02-bancos-por-servico.sh`. O realm é importado de `keycloak/realm-seniorinsight.json` apenas quando ainda não existe no banco. Depois de alterar o arquivo, recrie o banco com `docker compose down -v` ou apague o realm pelo console antes de subir de novo (para atualizar apenas os tempos de sessão sem apagar o banco, rode `bash deploy/scripts/configurar-tempos-de-sessao.sh`). Os secrets dos clients vêm das variáveis de ambiente do container (`${SI_WEB_CLIENT_SECRET}` no JSON).
 
 ### O que o realm configura
 
