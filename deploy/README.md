@@ -90,6 +90,41 @@ nome em uso fica em `/opt/seniorinsight/segredos.env`. O `deploy-stack.sh` lê e
 `stack.yml` usa `${SI_SECRET_GEMINI:-si_gemini_api_key}`, então a troca não exige mudar o repositório.
 No fim, o script pergunta se já aplica com o `deploy-stack.sh`.
 
+O `bootstrap-vm.sh` também cria `si_openwearables_vinculo_secret` com 32 bytes aleatórios.
+Esse secret é a chave estável usada pelo `telemetry-service` para gerar referências dos idosos:
+não o remova nem o troque depois que houver vínculos, ou as referências existentes deixarão de
+ser recuperáveis. O `si_stripe_secret_key` é solicitado pelo `definir-segredos.sh` e montado
+somente no `billing-service`.
+
+### Configuração dos serviços
+
+Antes do primeiro deploy, crie `/opt/seniorinsight/config.env` na VM (`chmod 600`). O
+`deploy-stack.sh` carrega esse arquivo sem versioná-lo. Os nomes abaixo correspondem aos
+placeholders dos `application.yml` dos serviços:
+
+```bash
+INSIGHT_GEMINI_ENABLED=true
+INSIGHT_GEMINI_TETO_DIARIO_MICROS=1000000
+INSIGHT_GEMINI_PRECO_ENTRADA=300000
+INSIGHT_GEMINI_PRECO_SAIDA=2500000
+
+SPRING_MAIL_HOST=smtp.exemplo.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=usuario
+SPRING_MAIL_PASSWORD=senha
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+
+# Opcional: habilita notificações push pelo Expo.
+EXPO_ACCESS_TOKEN=
+```
+
+O Score só chama o Gemini quando `INSIGHT_GEMINI_ENABLED=true` e o teto e os dois preços
+são maiores que zero. `SPRING_MAIL_*` é usado pelo auto-config do Spring nos serviços de
+notificação e relatório; sem `SPRING_MAIL_HOST`, os e-mails ficam apenas registrados em log.
+O `billing-service` recebe `STRIPE_ERASURE_ENABLED=true` e a chave montada como
+`STRIPE_SECRET_KEY`, permitindo apagar também o cliente no Stripe durante a exclusão LGPD.
+
 ## Login com Google
 
 O realm traz o identity provider `google`; o client secret vem do Docker secret `si_google_client_secret`

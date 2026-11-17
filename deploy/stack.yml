@@ -319,6 +319,13 @@ services:
       <<: *spring-env
       DB_NAME: notification
       DB_USERNAME: notification
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       # Token de serviço (client si-notification-service, role servico-interno) para o /internal/** do care.
       NOTIFICATION_CARE_TOKEN_URL: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/token
       NOTIFICATION_CARE_CLIENT_ID: si-notification-service
@@ -350,6 +357,8 @@ services:
         target: RABBITMQ_PASSWORD
       - source: si_openwearables_api_key
         target: OPENWEARABLES_API_KEY
+      - source: si_openwearables_vinculo_secret
+        target: OPENWEARABLES_VINCULO_SECRET
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
@@ -367,6 +376,10 @@ services:
       # Token de serviço (client si-insight-service, role servico-interno) para o /internal/** do care.
       INSIGHT_CARE_TOKEN_URL: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/token
       INSIGHT_CARE_CLIENT_ID: si-insight-service
+      INSIGHT_GEMINI_ENABLED: ${INSIGHT_GEMINI_ENABLED:-true}
+      INSIGHT_GEMINI_TETO_DIARIO_MICROS: ${INSIGHT_GEMINI_TETO_DIARIO_MICROS:?defina INSIGHT_GEMINI_TETO_DIARIO_MICROS em /opt/seniorinsight/config.env}
+      INSIGHT_GEMINI_PRECO_ENTRADA: ${INSIGHT_GEMINI_PRECO_ENTRADA:?defina INSIGHT_GEMINI_PRECO_ENTRADA em /opt/seniorinsight/config.env}
+      INSIGHT_GEMINI_PRECO_SAIDA: ${INSIGHT_GEMINI_PRECO_SAIDA:?defina INSIGHT_GEMINI_PRECO_SAIDA em /opt/seniorinsight/config.env}
     secrets:
       - source: si_db_insight_password
         target: DB_PASSWORD
@@ -392,6 +405,12 @@ services:
       MINIO_ACCESS_KEY: seniorinsight
       ARMAZENAMENTO_BUCKET: si-reports
       REPORT_AGENDAMENTO_HABILITADO: "true"
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
     secrets:
       - source: si_db_report_password
         target: DB_PASSWORD
@@ -410,11 +429,14 @@ services:
       <<: *spring-env
       DB_NAME: billing
       DB_USERNAME: billing
+      STRIPE_ERASURE_ENABLED: ${STRIPE_ERASURE_ENABLED:-true}
     secrets:
       - source: si_db_billing_password
         target: DB_PASSWORD
       - source: si_rabbitmq_password
         target: RABBITMQ_PASSWORD
+      - source: si_stripe_secret_key
+        target: STRIPE_SECRET_KEY
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
@@ -570,6 +592,11 @@ secrets:
   si_openwearables_api_key:
     external: true
     name: ${SI_SECRET_OPENWEARABLES:-si_openwearables_api_key}
+  si_openwearables_vinculo_secret:
+    external: true
+  si_stripe_secret_key:
+    external: true
+    name: ${SI_SECRET_STRIPE:-si_stripe_secret_key}
   si_ow_db_password:
     external: true
   si_ow_secret_key:

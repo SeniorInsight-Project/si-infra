@@ -15,6 +15,7 @@ CHAVES=(
   "si_google_client_secret|SI_SECRET_GOOGLE|Client secret do Google (login com Google no Keycloak)"
   "si_gemini_api_key|SI_SECRET_GEMINI|Chave da API do Gemini (insight-service)"
   "si_openwearables_api_key|SI_SECRET_OPENWEARABLES|API key do Open Wearables (telemetry e care)"
+  "si_stripe_secret_key|SI_SECRET_STRIPE|Chave secreta do Stripe (billing-service)"
 )
 
 docker info >/dev/null 2>&1 || { echo "sem acesso ao Docker: rode com sudo ou com um usuário do grupo docker"; exit 1; }
