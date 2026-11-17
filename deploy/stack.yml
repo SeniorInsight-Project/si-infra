@@ -221,6 +221,12 @@ services:
         target: SI_WEB_CLIENT_SECRET
       - source: si_identity_client_secret
         target: SI_IDENTITY_SERVICE_CLIENT_SECRET
+      - source: si_insight_client_secret
+        target: SI_INSIGHT_SERVICE_CLIENT_SECRET
+      - source: si_notification_client_secret
+        target: SI_NOTIFICATION_SERVICE_CLIENT_SECRET
+      - source: si_care_client_secret
+        target: SI_CARE_SERVICE_CLIENT_SECRET
       - source: si_google_client_secret
         target: GOOGLE_CLIENT_SECRET
     volumes:
@@ -267,11 +273,16 @@ services:
       JDBC_DATABASE_USERNAME: care
       OPENWEARABLES_ENABLED: "true"
       OPENWEARABLES_BASE_URL: http://ow-app:8000
+      # Token de serviço (client care-service, scope billing.trial.write) para abrir o trial no billing-service.
+      CARE_BILLING_TOKEN_URL: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/token
+      CARE_BILLING_CLIENT_ID: care-service
     secrets:
       - source: si_db_care_password
         target: JDBC_DATABASE_PASSWORD
       - source: si_care_jwt_secret
         target: JWT_SECRET
+      - source: si_care_client_secret
+        target: CARE_BILLING_CLIENT_SECRET
       - source: si_openwearables_api_key
         target: OPENWEARABLES_API_KEY
     networks: [backend]
@@ -308,11 +319,16 @@ services:
       <<: *spring-env
       DB_NAME: notification
       DB_USERNAME: notification
+      # Token de serviço (client si-notification-service, role servico-interno) para o /internal/** do care.
+      NOTIFICATION_CARE_TOKEN_URL: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/token
+      NOTIFICATION_CARE_CLIENT_ID: si-notification-service
     secrets:
       - source: si_db_notification_password
         target: DB_PASSWORD
       - source: si_rabbitmq_password
         target: RABBITMQ_PASSWORD
+      - source: si_notification_client_secret
+        target: NOTIFICATION_CARE_CLIENT_SECRET
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
@@ -347,6 +363,10 @@ services:
       DB_USERNAME: insight
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
+      # Token de serviço (client si-insight-service, role servico-interno) para o /internal/** do care.
+      INSIGHT_CARE_TOKEN_URL: http://keycloak:8080/auth/realms/seniorinsight/protocol/openid-connect/token
+      INSIGHT_CARE_CLIENT_ID: si-insight-service
     secrets:
       - source: si_db_insight_password
         target: DB_PASSWORD
@@ -354,6 +374,8 @@ services:
         target: RABBITMQ_PASSWORD
       - source: si_gemini_api_key
         target: GEMINI_API_KEY
+      - source: si_insight_client_secret
+        target: INSIGHT_CARE_CLIENT_SECRET
     networks: [backend]
     healthcheck: *spring-health
     deploy: *spring-deploy
@@ -526,6 +548,12 @@ secrets:
   si_web_client_secret:
     external: true
   si_identity_client_secret:
+    external: true
+  si_insight_client_secret:
+    external: true
+  si_notification_client_secret:
+    external: true
+  si_care_client_secret:
     external: true
   # Chaves de terceiros: o nome real vem de /opt/seniorinsight/segredos.env (deploy/scripts/definir-segredos.sh),
   # para trocar a chave sem editar este arquivo. Sem o arquivo, vale o nome base.

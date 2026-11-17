@@ -111,6 +111,27 @@ Para trocar o secret: rode o `definir-segredos.sh` de novo (cria a versão nova 
 o `configurar-login-google.sh`. Redirect URI cadastrado no Google:
 `https://seniorinsight-api.eastus.cloudapp.azure.com/auth/realms/seniorinsight/broker/google/endpoint`.
 
+## Clients de serviço do realm
+
+Chamadas entre serviços usam client credentials: `si-insight-service` e `si-notification-service` (role
+`servico-interno`, exigida pelo `/internal/**` do care-service) e `care-service` (scope
+`billing.trial.write`, exigido pelo billing-service no trial). Os secrets são os Docker secrets
+`si_insight_client_secret`, `si_notification_client_secret` e `si_care_client_secret`, montados no
+Keycloak como `SI_*_SERVICE_CLIENT_SECRET` e em cada serviço como `*_CLIENT_SECRET` (configtree).
+
+**Antes do deploy que traz esta mudança**, crie os secrets na VM (o script só cria os que faltam);
+sem eles, `docker stack deploy` falha:
+
+```bash
+cd ~/si-infra && git pull && sudo bash deploy/scripts/bootstrap-vm.sh
+```
+
+**Na VM que já existia**, o `--import-realm` não reimporta o realm. Depois do deploy, rode uma vez:
+
+```bash
+bash deploy/scripts/configurar-clients-de-servico.sh
+```
+
 ## Tempos de sessão do realm
 
 O realm define 30 dias de ociosidade (`ssoSessionIdleTimeout = 2592000`) e 365 dias no máximo

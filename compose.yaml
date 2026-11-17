@@ -126,6 +126,10 @@ services:
       KC_HEALTH_ENABLED: "true"
       SI_WEB_CLIENT_SECRET: ${SI_WEB_CLIENT_SECRET:?defina SI_WEB_CLIENT_SECRET no .env}
       SI_IDENTITY_SERVICE_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      # Clients de serviço (client credentials) para as chamadas entre serviços.
+      SI_INSIGHT_SERVICE_CLIENT_SECRET: ${SI_INSIGHT_SERVICE_CLIENT_SECRET:?defina SI_INSIGHT_SERVICE_CLIENT_SECRET no .env}
+      SI_NOTIFICATION_SERVICE_CLIENT_SECRET: ${SI_NOTIFICATION_SERVICE_CLIENT_SECRET:?defina SI_NOTIFICATION_SERVICE_CLIENT_SECRET no .env}
+      SI_CARE_SERVICE_CLIENT_SECRET: ${SI_CARE_SERVICE_CLIENT_SECRET:?defina SI_CARE_SERVICE_CLIENT_SECRET no .env}
       # Login com Google: o client ID está no realm; sem o secret no .env, o botão aparece mas o Google recusa.
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-nao-configurado}
       # Só no ambiente local: redirects do Expo Go (exp://<ip>:8081/--/auth) e do Expo web no client si-mobile.
@@ -182,6 +186,10 @@ services:
       DB_USERNAME: care
       # Integração antiga com o Open Wearables; a coleta é do telemetry-service.
       OPENWEARABLES_ENABLED: "false"
+      # Token de serviço (client care-service, scope billing.trial.write) para abrir o trial no billing-service.
+      CARE_BILLING_TOKEN_URL: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/token
+      CARE_BILLING_CLIENT_ID: care-service
+      CARE_BILLING_CLIENT_SECRET: ${SI_CARE_SERVICE_CLIENT_SECRET:?defina SI_CARE_SERVICE_CLIENT_SECRET no .env}
     expose:
       - "8080"
     # O Dockerfile do care não declara HEALTHCHECK; os outros serviços já trazem o deles.
@@ -223,6 +231,10 @@ services:
       DB_NAME: notification
       DB_USERNAME: notification
       CARE_BASE_URL: http://care-service:8080
+      # Token de serviço (client si-notification-service, role servico-interno) para o /internal/** do care.
+      NOTIFICATION_CARE_TOKEN_URL: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/token
+      NOTIFICATION_CARE_CLIENT_ID: si-notification-service
+      NOTIFICATION_CARE_CLIENT_SECRET: ${SI_NOTIFICATION_SERVICE_CLIENT_SECRET:?defina SI_NOTIFICATION_SERVICE_CLIENT_SECRET no .env}
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: "1025"
       # Push pelo Expo (opcional localmente).
@@ -269,6 +281,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       CARE_SERVICE_URL: http://care-service:8080
+      # Token de serviço (client si-insight-service, role servico-interno) para o /internal/** do care.
+      INSIGHT_CARE_TOKEN_URL: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/token
+      INSIGHT_CARE_CLIENT_ID: si-insight-service
+      INSIGHT_CARE_CLIENT_SECRET: ${SI_INSIGHT_SERVICE_CLIENT_SECRET:?defina SI_INSIGHT_SERVICE_CLIENT_SECRET no .env}
       # Score com o Gemini: desligado até haver chave, teto e tarifas maiores que zero (README-local.md).
       INSIGHT_GEMINI_ENABLED: ${INSIGHT_GEMINI_ENABLED:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
