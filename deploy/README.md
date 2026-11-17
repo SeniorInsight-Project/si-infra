@@ -90,6 +90,41 @@ nome em uso fica em `/opt/seniorinsight/segredos.env`. O `deploy-stack.sh` lê e
 `stack.yml` usa `${SI_SECRET_GEMINI:-si_gemini_api_key}`, então a troca não exige mudar o repositório.
 No fim, o script pergunta se já aplica com o `deploy-stack.sh`.
 
+O `bootstrap-vm.sh` também cria `si_openwearables_vinculo_secret` com 32 bytes aleatórios.
+Esse secret é a chave estável usada pelo `telemetry-service` para gerar referências dos idosos:
+não o remova nem o troque depois que houver vínculos, ou as referências existentes deixarão de
+ser recuperáveis. O `si_stripe_secret_key` é solicitado pelo `definir-segredos.sh` e montado
+somente no `billing-service`.
+
+### Configuração dos serviços
+
+Antes do primeiro deploy, crie `/opt/seniorinsight/config.env` na VM (`chmod 600`). O
+`deploy-stack.sh` carrega esse arquivo sem versioná-lo. Os nomes abaixo correspondem aos
+placeholders dos `application.yml` dos serviços:
+
+```bash
+INSIGHT_GEMINI_ENABLED=true
+INSIGHT_GEMINI_TETO_DIARIO_MICROS=1000000
+INSIGHT_GEMINI_PRECO_ENTRADA=300000
+INSIGHT_GEMINI_PRECO_SAIDA=2500000
+
+SPRING_MAIL_HOST=smtp.exemplo.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=usuario
+SPRING_MAIL_PASSWORD=senha
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+
+# Opcional: habilita notificações push pelo Expo.
+EXPO_ACCESS_TOKEN=
+```
+
+O Score só chama o Gemini quando `INSIGHT_GEMINI_ENABLED=true` e o teto e os dois preços
+são maiores que zero. `SPRING_MAIL_*` é usado pelo auto-config do Spring nos serviços de
+notificação e relatório; sem `SPRING_MAIL_HOST`, os e-mails ficam apenas registrados em log.
+O `billing-service` recebe `STRIPE_ERASURE_ENABLED=true` e a chave montada como
+`STRIPE_SECRET_KEY`, permitindo apagar também o cliente no Stripe durante a exclusão LGPD.
+
 ## Login com Google
 
 O realm traz o identity provider `google`; o client secret vem do Docker secret `si_google_client_secret`
@@ -110,6 +145,41 @@ bash deploy/scripts/configurar-login-google.sh
 Para trocar o secret: rode o `definir-segredos.sh` de novo (cria a versão nova e faz o deploy) e depois
 o `configurar-login-google.sh`. Redirect URI cadastrado no Google:
 `https://seniorinsight-api.eastus.cloudapp.azure.com/auth/realms/seniorinsight/broker/google/endpoint`.
+
+## Clients de serviço do realm
+
+Chamadas entre serviços usam client credentials: `si-insight-service` e `si-notification-service` (role
+`servico-interno`, exigida pelo `/internal/**` do care-service) e `care-service` (scope
+`billing.trial.write`, exigido pelo billing-service no trial). Os secrets são os Docker secrets
+`si_insight_client_secret`, `si_notification_client_secret` e `si_care_client_secret`, montados no
+Keycloak como `SI_*_SERVICE_CLIENT_SECRET` e em cada serviço como `*_CLIENT_SECRET` (configtree).
+
+**Antes do deploy que traz esta mudança**, crie os secrets na VM (o script só cria os que faltam);
+sem eles, `docker stack deploy` falha:
+
+```bash
+cd ~/si-infra && git pull && sudo bash deploy/scripts/bootstrap-vm.sh
+```
+
+**Na VM que já existia**, o `--import-realm` não reimporta o realm. Depois do deploy, rode uma vez:
+
+```bash
+bash deploy/scripts/configurar-clients-de-servico.sh
+```
+
+## Tempos de sessão do realm
+
+O realm define 30 dias de ociosidade (`ssoSessionIdleTimeout = 2592000`) e 365 dias no máximo
+(`ssoSessionMaxLifespan = 31536000`) para que o token do aparelho do idoso (emitido via token exchange
+no `si-identity-service`) não expire em 30 minutos. Os clients `si-mobile` e `si-web` mantêm 30 min
+(`1800`) e 10 h (`36000`) via `client.session.idle.timeout` e `client.session.max.lifespan`.
+
+**Na VM que já existia**, o `--import-realm` não reaplica alterações do JSON. Depois do deploy, rode
+uma vez (lê os valores direto de `keycloak/realm-seniorinsight.json` e aplica via `kcadm`):
+
+```bash
+bash deploy/scripts/configurar-tempos-de-sessao.sh
+```
 
 ## Preparação da VM (já feita; repetir só numa VM nova)
 

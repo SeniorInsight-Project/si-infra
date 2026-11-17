@@ -12,6 +12,7 @@ export SI_WEB_URL="${SI_WEB_URL:-$(cat /opt/seniorinsight/si-web-url 2>/dev/null
 [ -f /opt/seniorinsight/si-web-url ] || echo "::warning::defina a URL do si-web na Vercel em /opt/seniorinsight/si-web-url"
 # Nome atual de cada Docker secret de terceiros (SI_SECRET_*), mantido por deploy/scripts/definir-segredos.sh.
 if [ -f /opt/seniorinsight/segredos.env ]; then set -a; . /opt/seniorinsight/segredos.env; set +a; fi
+if [ -f /opt/seniorinsight/config.env ]; then set -a; . /opt/seniorinsight/config.env; set +a; fi
 
 echo "== copiando $REPO para $DESTINO"
 rsync -a --delete --exclude .git --exclude .github "$REPO"/ "$DESTINO"/
