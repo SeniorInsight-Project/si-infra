@@ -39,9 +39,10 @@ pasta/
 Copie `.env.example` para `.env` (no PowerShell, `Copy-Item .env.example .env`) e troque pelo menos:
 
 - `SI_WEB_CLIENT_SECRET` e `SI_IDENTITY_SERVICE_CLIENT_SECRET` (ex.: `openssl rand -hex 32`);
+- `SI_INSIGHT_SERVICE_CLIENT_SECRET`, `SI_NOTIFICATION_SERVICE_CLIENT_SECRET` e `SI_CARE_SERVICE_CLIENT_SECRET`: clients de serviço das chamadas entre serviços (mesmo formato);
 - `OPENWEARABLES_VINCULO_SECRET`: pelo menos 32 bytes e nunca trocado depois de haver vínculos.
 
-O Compose não sobe sem essas três variáveis.
+O Compose não sobe sem essas variáveis. Num `.env` antigo, acrescente os três secrets de serviço e, se o banco do Keycloak já existia, rode `bash deploy/scripts/configurar-clients-de-servico.sh` com o Compose no ar (o realm só é importado em banco novo; ver README.md).
 
 ### 3. Subir
 
