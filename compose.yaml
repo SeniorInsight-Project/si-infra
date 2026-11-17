@@ -1,13 +1,46 @@
 name: seniorinsight
 
+# Ambiente local completo do SeniorInsight. Os builds usam os repositórios clonados lado a lado com este
+# (../si-care-service, ../si-api-gateway etc.); ver README-local.md. O equivalente de produção é deploy/stack.yml.
+
+x-spring-env: &spring-env
+  SERVER_PORT: "8080"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  # Local: todos os usuários de banco dos serviços usam DB_PASSWORD (postgres/init/02-bancos-por-servico.sh).
+  DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: /
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-seniorinsight}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seniorinsight}
+  # O issuer é o endereço público (o que vai no token); as chaves são buscadas pela rede interna.
+  KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
+  KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
+
+# Dependências de infraestrutura comuns aos serviços de negócio.
+x-spring-depends: &spring-depends
+  postgres:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+  keycloak:
+    condition: service_started
+
 services:
+
+  # ---------------------------------------------------------------- infra
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
+      # POSTGRES_USER/POSTGRES_DB são só de administração. Cada serviço tem banco e usuário próprios.
       POSTGRES_DB: ${DB_NAME:-seniorinsight}
       POSTGRES_USER: ${DB_USERNAME:-seniorinsight}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-seniorinsight}
+      SI_DB_SENHA_SERVICOS: ${DB_PASSWORD:-seniorinsight}
+    command: ["postgres", "-c", "max_connections=200"]
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
@@ -52,6 +85,29 @@ services:
       retries: 10
       start_period: 20s
 
+  # Armazenamento dos PDFs do report-service (mesma imagem do deploy/stack.yml).
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-seniorinsight}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-seniorinsight-minio}
+    ports:
+      # A API precisa estar no host: as URLs assinadas dos relatórios são abertas pelo navegador.
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+
+  # SMTP de desenvolvimento do Keycloak, do notification e do report; nenhum e-mail sai da máquina.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.3
     restart: unless-stopped
@@ -61,8 +117,8 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-seniorinsight}
-      KC_DB_USERNAME: ${DB_USERNAME:-seniorinsight}
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
       KC_DB_SCHEMA: keycloak
       KC_HTTP_ENABLED: "true"
@@ -88,154 +144,250 @@ services:
       mailpit:
         condition: service_started
 
-  mailpit:
-    image: axllent/mailpit:v1.27
-    restart: unless-stopped
-    ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
-
-  backend-core:
-    build:
-      context: ../backend-core-main
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SERVER_PORT: 8080
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-seniorinsight}
-      DB_USERNAME: ${DB_USERNAME:-seniorinsight}
-      DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      GOOGLE_CLIENT_ID_LOCAL: ${GOOGLE_CLIENT_ID_LOCAL:-}
-      GOOGLE_CLIENT_SECRET_LOCAL: ${GOOGLE_CLIENT_SECRET_LOCAL:-}
-      LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY:-}
-      LLM_ANTHROPIC_API_KEY: ${LLM_ANTHROPIC_API_KEY:-}
-      LLM_GOOGLE_API_KEY: ${LLM_GOOGLE_API_KEY:-}
-      OPENWEARABLES_ENABLED: ${OPENWEARABLES_ENABLED:-false}
-      OPENWEARABLES_BASE_URL: ${OPENWEARABLES_BASE_URL:-https://api.openwearables.io}
-      OPENWEARABLES_API_KEY: ${OPENWEARABLES_API_KEY:-}
-    expose:
-      - "8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 60s
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
+  # ---------------------------------------------------------------- serviços
+  # Só o gateway é publicado no host; os serviços ficam na rede interna do Compose.
   api-gateway:
     build:
-      context: ../si-api-gateway-develop
-      dockerfile: Dockerfile
+      context: ../si-api-gateway
     restart: unless-stopped
     environment:
-      SERVER_PORT: 8080
+      <<: *spring-env
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      CARE_SERVICE_URI: http://backend-core:8080
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URI: http://care-service:8080
       IDENTITY_SERVICE_URI: http://identity-service:8080
       NOTIFICATION_SERVICE_URI: http://notification-service:8080
-      # Serviços ainda fora deste Compose: até entrarem aqui, as rotas deles respondem 5xx.
       TELEMETRY_SERVICE_URI: http://telemetry-service:8080
       INSIGHT_SERVICE_URI: http://insight-service:8080
       REPORT_SERVICE_URI: http://report-service:8080
       BILLING_SERVICE_URI: http://billing-service:8080
-      KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
-      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
-      GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
+      GATEWAY_CORS_ALLOWED_ORIGINS: ${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8081}
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
+    # Não espera os serviços ficarem saudáveis: com um serviço fora do ar, só as rotas dele respondem 5xx.
     depends_on:
-      backend-core:
-        condition: service_healthy
-      identity-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
       keycloak:
         condition: service_started
       redis:
         condition: service_healthy
-  identity-service:
-    build:
-      context: ../si-identity-service-develop
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    environment:
-      SERVER_PORT: 8080
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-seniorinsight}
-      DB_USERNAME: ${DB_USERNAME:-seniorinsight}
-      DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_VHOST: /
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-seniorinsight}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seniorinsight}
-      KEYCLOAK_ISSUER_URI: http://localhost:${KEYCLOAK_PORT:-8180}/realms/seniorinsight
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/seniorinsight/protocol/openid-connect/certs
-      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
-      KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      CARE_SERVICE_URL: http://backend-core:8080
-    expose:
-      - "8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      keycloak:
-        condition: service_started
 
-  notification-service:
+  care-service:
     build:
-      context: ../si-notification-service-main
-      dockerfile: Dockerfile
+      context: ../si-care-service
     restart: unless-stopped
-    deploy:
-      replicas: 1
     environment:
-      SERVER_PORT: 8080
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-seniorinsight}
-      DB_USERNAME: ${DB_USERNAME:-seniorinsight}
-      DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_VHOST: /
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-seniorinsight}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seniorinsight}
+      <<: *spring-env
+      SPRING_PROFILES_ACTIVE: dev
+      DB_NAME: care
+      DB_USERNAME: care
+      # Integração antiga com o Open Wearables; a coleta é do telemetry-service.
+      OPENWEARABLES_ENABLED: "false"
     expose:
       - "8080"
+    # O Dockerfile do care não declara HEALTHCHECK; os outros serviços já trazem o deles.
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 5
-      start_period: 60s
+      start_period: 90s
+    depends_on: *spring-depends
+
+  identity-service:
+    build:
+      context: ../si-identity-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: identity
+      DB_USERNAME: identity
+      # Pareamento do idoso (HU-007): Admin API e token exchange pela service account do si-identity-service.
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_CLIENT_SECRET: ${SI_IDENTITY_SERVICE_CLIENT_SECRET:?defina SI_IDENTITY_SERVICE_CLIENT_SECRET no .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
+    expose:
+      - "8080"
     depends_on:
+      <<: *spring-depends
+      redis:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ../si-notification-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: notification
+      DB_USERNAME: notification
+      CARE_BASE_URL: http://care-service:8080
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: "1025"
+      # Push pelo Expo (opcional localmente).
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+    expose:
+      - "8080"
+    depends_on:
+      <<: *spring-depends
+      mailpit:
+        condition: service_started
+
+  telemetry-service:
+    build:
+      context: ../si-telemetry-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: telemetry
+      DB_USERNAME: telemetry
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
+      # Coleta do Open Wearables: suba com --profile ow e ligue depois de criar a API key (README-local.md).
+      OPENWEARABLES_ENABLED: ${OPENWEARABLES_ENABLED:-false}
+      OPENWEARABLES_BASE_URL: http://ow-app:8000
+      OPENWEARABLES_API_KEY: ${OPENWEARABLES_API_KEY:-}
+      # Pelo menos 32 bytes e nunca trocado depois: é a base da referência do idoso no Open Wearables.
+      OPENWEARABLES_VINCULO_SECRET: ${OPENWEARABLES_VINCULO_SECRET:?defina OPENWEARABLES_VINCULO_SECRET no .env}
+    expose:
+      - "8080"
+    depends_on:
+      <<: *spring-depends
+      redis:
+        condition: service_healthy
+
+  insight-service:
+    build:
+      context: ../si-insight-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: insight
+      DB_USERNAME: insight
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CARE_SERVICE_URL: http://care-service:8080
+      # Score com o Gemini: desligado até haver chave, teto e tarifas maiores que zero (README-local.md).
+      INSIGHT_GEMINI_ENABLED: ${INSIGHT_GEMINI_ENABLED:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      INSIGHT_GEMINI_TETO_DIARIO_MICROS: ${INSIGHT_GEMINI_TETO_DIARIO_MICROS:-0}
+      INSIGHT_GEMINI_PRECO_ENTRADA: ${INSIGHT_GEMINI_PRECO_ENTRADA:-0}
+      INSIGHT_GEMINI_PRECO_SAIDA: ${INSIGHT_GEMINI_PRECO_SAIDA:-0}
+    expose:
+      - "8080"
+    depends_on:
+      <<: *spring-depends
+      redis:
+        condition: service_healthy
+
+  report-service:
+    build:
+      context: ../si-report-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: report
+      DB_USERNAME: report
+      ARMAZENAMENTO_PROVEDOR: minio
+      ARMAZENAMENTO_BUCKET: si-reports
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-seniorinsight}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-seniorinsight-minio}
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: "1025"
+      REPORT_AGENDAMENTO_HABILITADO: "true"
+    expose:
+      - "8080"
+    depends_on:
+      <<: *spring-depends
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+
+  billing-service:
+    build:
+      context: ../si-billing-service
+    restart: unless-stopped
+    environment:
+      <<: *spring-env
+      DB_NAME: billing
+      DB_USERNAME: billing
+      BILLING_PREMIUM_PRECO_CENTAVOS: ${BILLING_PREMIUM_PRECO_CENTAVOS:-}
+      STRIPE_ERASURE_ENABLED: ${STRIPE_ERASURE_ENABLED:-false}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+    expose:
+      - "8080"
+    depends_on: *spring-depends
+
+  # ---------------------------------------------------------------- Open Wearables (profile "ow")
+  # Espelha deploy/stack.yml com ENVIRONMENT=local. Sobe só com: docker compose --profile ow up -d
+  ow-app:
+    profiles: ["ow"]
+    image: themomentum/open-wearables-backend:0.9.0
+    restart: unless-stopped
+    entrypoint: ["scripts/start/app.sh"]
+    environment: &ow-env
+      ENVIRONMENT: local
+      TELEMETRY_ENABLED: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: openwearables
+      DB_USER: openwearables
+      DB_PASSWORD: ${DB_PASSWORD:-seniorinsight}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "2"
+      SECRET_KEY: ${OW_SECRET_KEY:-troque-este-secret-key-local-do-open-wearables}
+      ADMIN_EMAIL: ${OW_ADMIN_EMAIL:-admin@seniorinsight.local}
+      ADMIN_PASSWORD: ${OW_ADMIN_PASSWORD:-SenhaAdminOw2026}
+      OUTGOING_WEBHOOKS_ENABLED: "false"
+      CORS_ORIGINS: '["http://localhost:${OW_FRONTEND_PORT:-3000}"]'
+      FRONTEND_URL: http://localhost:${OW_FRONTEND_PORT:-3000}
+      API_BASE_URL: http://localhost:${OW_API_PORT:-8000}
+    ports:
+      - "${OW_API_PORT:-8000}:8000"
+    depends_on: &ow-depends
       postgres:
         condition: service_healthy
-      rabbitmq:
+      redis:
         condition: service_healthy
+
+  ow-worker:
+    profiles: ["ow"]
+    image: themomentum/open-wearables-backend:0.9.0
+    restart: unless-stopped
+    entrypoint: ["scripts/start/worker.sh"]
+    environment: *ow-env
+    depends_on: *ow-depends
+
+  ow-beat:
+    profiles: ["ow"]
+    image: themomentum/open-wearables-backend:0.9.0
+    restart: unless-stopped
+    entrypoint: ["scripts/start/beat.sh"]
+    environment: *ow-env
+    depends_on: *ow-depends
+
+  ow-frontend:
+    profiles: ["ow"]
+    image: themomentum/open-wearables-frontend:0.9.0
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:${OW_API_PORT:-8000}
+      API_URL: http://ow-app:8000
+    ports:
+      - "${OW_FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      ow-app:
+        condition: service_started
 
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  minio_data:
