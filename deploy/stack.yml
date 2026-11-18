@@ -349,6 +349,11 @@ services:
       DB_USERNAME: telemetry
       OPENWEARABLES_ENABLED: "true"
       OPENWEARABLES_BASE_URL: http://ow-app:8000
+      # Endereço que o celular recebe no token do SDK (Caddy :8443 -> ow-app:8000). ow-app não é
+      # alcançável pelo aparelho: com ele o SDK conecta ao Health Connect mas nenhum dado chega.
+      OPENWEARABLES_PUBLIC_URL: https://${SI_HOST}:8443
+      # ID da aplicação do Open Wearables (não é segredo): /opt/seniorinsight/config.env.
+      OPENWEARABLES_APP_ID: ${SI_OW_APP_ID:-}
       CARE_SERVICE_URL: http://care-service:8080
     secrets:
       - source: si_db_telemetry_password
@@ -357,6 +362,8 @@ services:
         target: RABBITMQ_PASSWORD
       - source: si_openwearables_api_key
         target: OPENWEARABLES_API_KEY
+      - source: si_openwearables_app_secret
+        target: OPENWEARABLES_APP_SECRET
       - source: si_openwearables_vinculo_secret
         target: OPENWEARABLES_VINCULO_SECRET
     networks: [backend]
@@ -594,6 +601,9 @@ secrets:
     name: ${SI_SECRET_OPENWEARABLES:-si_openwearables_api_key}
   si_openwearables_vinculo_secret:
     external: true
+  si_openwearables_app_secret:
+    external: true
+    name: ${SI_SECRET_OW_APP_SECRET:-si_openwearables_app_secret}
   si_stripe_secret_key:
     external: true
     name: ${SI_SECRET_STRIPE:-si_stripe_secret_key}
