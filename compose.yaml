@@ -260,7 +260,13 @@ services:
       # Coleta do Open Wearables: suba com --profile ow e ligue depois de criar a API key (README-local.md).
       OPENWEARABLES_ENABLED: ${OPENWEARABLES_ENABLED:-false}
       OPENWEARABLES_BASE_URL: http://ow-app:8000
+      # Endereço que o celular recebe no token do SDK para enviar os dados. ow-app só existe na rede do Docker:
+      # o aparelho precisa do IP desta máquina na rede (ex.: http://192.168.0.10:8000). Ver README-local.md.
+      OPENWEARABLES_PUBLIC_URL: ${OPENWEARABLES_PUBLIC_URL:-http://localhost:${OW_API_PORT:-8000}}
       OPENWEARABLES_API_KEY: ${OPENWEARABLES_API_KEY:-}
+      # Aplicação do Open Wearables (portal > Applications): o telemetry emite com elas o token do SDK do celular.
+      OPENWEARABLES_APP_ID: ${OPENWEARABLES_APP_ID:-}
+      OPENWEARABLES_APP_SECRET: ${OPENWEARABLES_APP_SECRET:-}
       # Pelo menos 32 bytes e nunca trocado depois: é a base da referência do idoso no Open Wearables.
       OPENWEARABLES_VINCULO_SECRET: ${OPENWEARABLES_VINCULO_SECRET:?defina OPENWEARABLES_VINCULO_SECRET no .env}
     expose:

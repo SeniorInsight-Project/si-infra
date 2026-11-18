@@ -83,6 +83,10 @@ docker compose --profile ow up -d
 
 1. Entre no portal com `OW_ADMIN_EMAIL` e `OW_ADMIN_PASSWORD` e crie uma API key.
 2. No `.env`, preencha `OPENWEARABLES_API_KEY` e troque `OPENWEARABLES_ENABLED` para `true`.
+   Para o celular enviar dados, crie também uma aplicação no portal e preencha `OPENWEARABLES_APP_ID` e
+   `OPENWEARABLES_APP_SECRET`, e ponha em `OPENWEARABLES_PUBLIC_URL` o IP desta máquina na rede
+   (ex.: `http://192.168.0.10:8000`). O celular recebe esse endereço no token do SDK e envia os dados
+   direto para ele: `localhost` ou `ow-app` não funcionam no aparelho.
 3. Recrie o telemetry: `docker compose --profile ow up -d telemetry-service`.
 
 Sem o profile, deixe `OPENWEARABLES_ENABLED=false`: o telemetry sobe normalmente e não coleta.

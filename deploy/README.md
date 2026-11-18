@@ -90,6 +90,12 @@ nome em uso fica em `/opt/seniorinsight/segredos.env`. O `deploy-stack.sh` lê e
 `stack.yml` usa `${SI_SECRET_GEMINI:-si_gemini_api_key}`, então a troca não exige mudar o repositório.
 No fim, o script pergunta se já aplica com o `deploy-stack.sh`.
 
+O token do SDK do celular usa uma aplicação criada no portal do Open Wearables (`:3443`). O app secret
+entra pelo `definir-segredos.sh` (`si_openwearables_app_secret`) e o ID, que não é segredo, vai em
+`/opt/seniorinsight/config.env` como `SI_OW_APP_ID=...`. O celular recebe no token o endereço
+`https://SI_HOST:8443` e envia os dados direto para ele, então a porta 8443 precisa estar liberada no
+NSG da VM.
+
 O `bootstrap-vm.sh` também cria `si_openwearables_vinculo_secret` com 32 bytes aleatórios.
 Esse secret é a chave estável usada pelo `telemetry-service` para gerar referências dos idosos:
 não o remova nem o troque depois que houver vínculos, ou as referências existentes deixarão de

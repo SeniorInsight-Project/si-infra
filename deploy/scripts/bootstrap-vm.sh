@@ -64,6 +64,7 @@ segredo si_ow_admin_password      "$(aleatorio)"
 # Chaves de terceiros: começam com um marcador e são trocadas depois (ver deploy/README.md).
 segredo si_gemini_api_key         "nao-configurado"
 segredo si_openwearables_api_key  "nao-configurado"
+segredo si_openwearables_app_secret "nao-configurado"
 segredo si_google_client_secret   "nao-configurado"
 
 echo "Pronto."

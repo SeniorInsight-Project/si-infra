@@ -14,6 +14,13 @@ export SI_WEB_URL="${SI_WEB_URL:-$(cat /opt/seniorinsight/si-web-url 2>/dev/null
 if [ -f /opt/seniorinsight/segredos.env ]; then set -a; . /opt/seniorinsight/segredos.env; set +a; fi
 if [ -f /opt/seniorinsight/config.env ]; then set -a; . /opt/seniorinsight/config.env; set +a; fi
 
+# Secret criado depois do bootstrap: numa VM antiga ele ainda não existe e o stack deploy falharia.
+# Cria com o marcador; o valor real entra pelo definir-segredos.sh.
+if ! docker secret inspect "${SI_SECRET_OW_APP_SECRET:-si_openwearables_app_secret}" >/dev/null 2>&1; then
+  printf '%s' "nao-configurado" | docker secret create "${SI_SECRET_OW_APP_SECRET:-si_openwearables_app_secret}" - >/dev/null
+  echo "::warning::defina o app secret do Open Wearables com deploy/scripts/definir-segredos.sh e SI_OW_APP_ID em /opt/seniorinsight/config.env"
+fi
+
 echo "== copiando $REPO para $DESTINO"
 rsync -a --delete --exclude .git --exclude .github "$REPO"/ "$DESTINO"/
 chmod +x "$DESTINO"/deploy/entrypoints/*.sh "$DESTINO"/deploy/postgres-init/*.sh
